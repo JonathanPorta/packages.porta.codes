@@ -1,0 +1,26 @@
+{
+  "schema": "blessed/package-repository-inventory/v1",
+  "surface_id": "packages",
+  "public_base_url": "https://packages.porta.codes/",
+  "repository_key": {"fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/repository.asc"},
+  "producer_keys": [
+    {"producer_repo": "JonathanPorta/kioskd", "fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/kioskd-rpm.asc"},
+    {"producer_repo": "JonathanPorta/corpus", "fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/corpus-rpm.asc"},
+    {"producer_repo": "JonathanPorta/keysprout", "fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/keysprout-rpm.asc"}
+  ],
+  "repositories": [
+    {"id": "kioskd-apt", "format": "apt", "path": "apt/kioskd/", "product": "kioskd", "producer_repo": "JonathanPorta/kioskd", "channel": "stable",
+     "targets": [{"distro": "debian", "release": "13"}, {"distro": "raspberry-pi-os", "release": "13"}],
+     "suite": "stable", "component": "main", "architectures": ["amd64", "arm64"]},
+    {"id": "kioskd-rpm-x86-64", "format": "dnf", "path": "rpm/kioskd/x86_64/", "product": "kioskd", "producer_repo": "JonathanPorta/kioskd", "channel": "stable",
+     "targets": [{"distro": "fedora", "release": "44"}], "arch": "x86_64"},
+    {"id": "corpus-apt", "format": "apt", "path": "apt/corpus/", "product": "corpus", "producer_repo": "JonathanPorta/corpus", "channel": "stable",
+     "targets": [{"distro": "debian", "release": "13"}], "suite": "stable", "component": "main", "architectures": ["amd64", "arm64"]},
+    {"id": "corpus-rpm-x86-64", "format": "dnf", "path": "rpm/corpus/x86_64/", "product": "corpus", "producer_repo": "JonathanPorta/corpus", "channel": "stable",
+     "targets": [{"distro": "fedora", "release": "44"}], "arch": "x86_64"},
+    {"id": "corpus-rpm-aarch64", "format": "dnf", "path": "rpm/corpus/aarch64/", "product": "corpus", "producer_repo": "JonathanPorta/corpus", "channel": "stable",
+     "targets": [{"distro": "fedora", "release": "44"}], "arch": "aarch64"},
+    {"id": "keysprout-rpm-x86-64", "format": "dnf", "path": "rpm/keysprout/x86_64/", "product": "keysprout", "producer_repo": "JonathanPorta/keysprout", "channel": "stable",
+     "targets": [{"distro": "fedora", "release": "44"}], "arch": "x86_64"}
+  ]
+}
