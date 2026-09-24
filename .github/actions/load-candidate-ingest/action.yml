@@ -1,0 +1,26 @@
+name: 'Load the candidate-ingest secret'
+description: 'Load ONLY the candidate-ingest authority domain secret from Bitwarden Secrets Manager.'
+
+# One loader per authority domain (secrets.bwsm-authority-domains@1), so a job
+# in one domain has no mapping by which it could load another domain's secret.
+# The UUID below is a PLACEHOLDER until `scripts/bws/bootstrap.sh
+# --secrets-list .bws/candidate-ingest.list --loader .github/actions/load-candidate-ingest/action.yml`
+# fills it (see README "Provisioning"); workflows refuse to run while it is.
+# The `secrets:` block is parsed line by line as `<UUID> > <ENV_VAR>` — no
+# comments inside it.
+
+inputs:
+  access_token:
+    description: 'The candidate-ingest machine account token (the Environment secret BWS_ACCESS_TOKEN).'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: '🔐 Load PACKAGES_CANDIDATE_READ_TOKEN'
+      shell: bash
+      env:
+        INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
+        INPUT_SECRETS: |
+          00000000-0000-0000-0000-000000000001 > PACKAGES_CANDIDATE_READ_TOKEN
+      run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"

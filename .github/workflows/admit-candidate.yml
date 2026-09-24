@@ -1,0 +1,166 @@
+name: Admit candidate
+
+# Promotion transport (release-surfaces.yaml: workflow_dispatch). An operator
+# names a producer and a tag; this workflow fetches that release's COMPLETE
+# asset set with the read-only candidate credential, admits it against this
+# repository's committed trust store and policy (scripts/surface/admit.sh), and
+# opens a REVIEWED PR changing inventory/inventory.json. Merging that PR is the
+# approval; publish.yml does the rest.
+#
+# Authority, one domain per job:
+#   fetch    candidate-ingest Environment: ONLY the producer read token.
+#   admit    no secret: the pinned tools image, offline.
+#   propose  GITHUB_TOKEN with contents + pull-requests write: pushes a branch
+#            and opens a PR. Never touches main, keys, or the store.
+
+on:
+  workflow_dispatch:
+    inputs:
+      producer_repo:
+        description: 'The producer repository'
+        required: true
+        type: choice
+        options:
+          - JonathanPorta/kioskd
+          - JonathanPorta/corpus
+          - JonathanPorta/keysprout
+      tag:
+        description: 'The release tag to admit (vX.Y.Z)'
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: admit-${{ inputs.producer_repo }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    name: 🔐 Fetch the candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: candidate-ingest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: 🚦 Inputs and provisioning
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9][0-9A-Za-z.+~-]*$ ]] || { echo "::error::tag '$TAG' is not vX.Y.Z"; exit 1; }
+          if grep -q '00000000-0000-0000-0000-000000000001' .github/actions/load-candidate-ingest/action.yml; then
+            echo "::error::candidate-ingest is not provisioned (placeholder UUID). See README Provisioning."; exit 1
+          fi
+
+      - name: 🔐 Load the producer read token
+        uses: ./.github/actions/load-candidate-ingest
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+
+      - name: 📦 Fetch the COMPLETE release asset set
+        env:
+          REPO: ${{ inputs.producer_repo }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          : "${PACKAGES_CANDIDATE_READ_TOKEN:?candidate-ingest token is not set}"
+          export GH_TOKEN="$PACKAGES_CANDIDATE_READ_TOKEN"
+          draft="$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq .isDraft)"
+          [ "$draft" = false ] || { echo "::error::$REPO $TAG is a draft; only published candidates are admitted"; exit 1; }
+          mkdir candidate
+          gh release download "$TAG" --repo "$REPO" --dir candidate
+          ls -l candidate
+
+      - name: 🧼 Scrub the credential
+        if: ${{ always() }}
+        run: echo "PACKAGES_CANDIDATE_READ_TOKEN=" >>"$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: candidate
+          path: candidate/
+          retention-days: 7
+
+  admit:
+    name: 🧾 Admit against the committed trust store
+    needs: fetch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: candidate
+          path: candidate
+      - name: 🧰 Pinned tools image
+        run: make tools-image
+      - name: 🧾 Admit
+        env:
+          REPO: ${{ inputs.producer_repo }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm -v "$PWD":/w -w /w ppc-tools bash scripts/surface/admit.sh \
+            --candidate-dir candidate --producer-repo "$REPO" --tag "$TAG" \
+            --out out/inventory.json --pool out/pool 2>&1 | tee out/admission.log
+          if cmp -s out/inventory.json inventory/inventory.json; then echo unchanged >out/status; else echo changed >out/status; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: admission
+          path: |
+            out/inventory.json
+            out/admission.log
+            out/status
+
+  propose:
+    name: 📝 Open the inventory PR
+    needs: admit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: admission
+          path: out
+      - name: 📝 Branch, commit, PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ inputs.producer_repo }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$(cat out/status)" = unchanged ]; then
+            echo "::notice::$REPO $TAG is already admitted; no PR"
+            exit 0
+          fi
+          branch="admit/${REPO#*/}-$TAG"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          cp out/inventory.json inventory/inventory.json
+          git add inventory/inventory.json
+          git commit -q -m "feat: admit $REPO $TAG"
+          git push -q origin "$branch"
+          {
+            echo "Admits \`$REPO\` \`$TAG\` into the package inventory (blessed releases.package-repositories@1 PR-2/PR-3)."
+            echo
+            echo "Admission log:"
+            echo '```'
+            cat out/admission.log
+            echo '```'
+            echo
+            echo "Before merging: run **CI** on \`$branch\` (Actions → CI → Run workflow) — PRs opened by GITHUB_TOKEN do not start it — and get an independent review. Merging publishes (publish.yml)."
+          } >body.md
+          gh pr create --base main --head "$branch" --title "feat: Admit ${REPO#*/} $TAG" --body-file body.md --assignee JonathanPorta

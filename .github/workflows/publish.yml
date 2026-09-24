@@ -1,0 +1,255 @@
+name: Publish
+
+# Publish the repository the committed inventory defines
+# (blessed releases.package-repositories@1 PR-4 … PR-15). Every step holds
+# only the authority it needs; each job is its own authority domain:
+#
+#   plan       no secret   validate; read the live generation (the expected
+#                          parent) and the inventory's commit time
+#   fetch      candidate-ingest     retained packages from the public surface,
+#                                   new ones from producer releases; every
+#                                   byte checked against the inventory
+#   generate   no secret   pinned tools image; unsigned, deterministic
+#   sign       repository-signing   the repository key, and nothing else
+#   staged     no secret   verify with public keys only; then real apt/dnf
+#                          install → upgrade → remove per supported row
+#                          against the generation served as
+#                          https://packages.porta.codes/ (throwaway CA in the
+#                          clients only; configuration tested byte for byte)
+#   publish    repository-publication   OIDC role packages-porta-codes-publisher:
+#                          create-only immutables, fenced claim, conditional
+#                          entrypoints, confirm, read back from the store
+#   read-back  no secret   real clients against the live endpoint
+#
+# Publications are serialized (one concurrency group, never cancelled): a
+# second run waits, then plans against whatever the first activated. Re-running
+# a failed run is the resume path: an interrupted activation is taken over, and
+# a completed one is a no-op (already active / replay).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'inventory/inventory.json'
+      - 'keys/**'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-packages
+  cancel-in-progress: false
+
+env:
+  POINTER_URL: https://packages.porta.codes/_state/generation.json
+  INVENTORY: inventory/inventory.json
+
+jobs:
+  plan:
+    name: 🧭 Plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      parent: ${{ steps.plan.outputs.parent }}
+      timestamp: ${{ steps.plan.outputs.timestamp }}
+      fingerprint: ${{ steps.plan.outputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+      - id: plan
+        name: 🧭 Validate, and read the live generation
+        run: |
+          set -euo pipefail
+          [ -f "$INVENTORY" ] || { echo "::error::no $INVENTORY yet — admit a candidate first"; exit 1; }
+          bash scripts/release/validate-package-inventory.sh --file "$INVENTORY"
+          fpr="$(jq -r .repository_key.fingerprint "$INVENTORY")"
+          [[ "$fpr" =~ ^[0-9A-F]{40}$ ]] || { echo "::error::the repository key is not provisioned"; exit 1; }
+          parent="$(bash scripts/surface/live-parent.sh "$POINTER_URL")"
+          ts="$(git log -1 --format=%ct -- "$INVENTORY")"
+          echo "expected parent: $parent · timestamp: $ts · repository key: $fpr"
+          { echo "parent=$parent"; echo "timestamp=$ts"; echo "fingerprint=$fpr"; } >>"$GITHUB_OUTPUT"
+
+  fetch:
+    name: 🔐 Fetch the pool
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: candidate-ingest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: 🚦 Provisioning
+        run: |
+          if grep -q '00000000-0000-0000-0000-000000000001' .github/actions/load-candidate-ingest/action.yml; then
+            echo "::error::candidate-ingest is not provisioned (placeholder UUID). See README Provisioning."; exit 1
+          fi
+      - name: 🔐 Load the producer read token
+        uses: ./.github/actions/load-candidate-ingest
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+      - name: 📥 Fetch every package, each checked against the inventory
+        run: |
+          set -euo pipefail
+          : "${PACKAGES_CANDIDATE_READ_TOKEN:?candidate-ingest token is not set}"
+          GH_TOKEN="$PACKAGES_CANDIDATE_READ_TOKEN" bash scripts/surface/fetch-pool.sh --inventory "$INVENTORY" --pool pool
+      - name: 🧼 Scrub the credential
+        if: ${{ always() }}
+        run: echo "PACKAGES_CANDIDATE_READ_TOKEN=" >>"$GITHUB_ENV"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pool
+          path: pool/
+          retention-days: 7
+
+  generate:
+    name: 🏗️ Generate (pinned tools, unsigned)
+    needs: [plan, fetch]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: pool
+          path: pool
+      - name: 🧰 Pinned tools image
+        run: make tools-image
+      - name: 🏗️ Generate
+        env:
+          TS: ${{ needs.plan.outputs.timestamp }}
+        run: |
+          set -euo pipefail
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/w -w /w ppc-tools \
+            bash scripts/release/pkgrepo-generate.sh --inventory "$INVENTORY" --pool pool --keys-dir . \
+              --timestamp "$TS" --tool-pins tools/tool-pins --out generation
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: generation-unsigned
+          path: generation/
+          include-hidden-files: true
+          retention-days: 7
+
+  sign:
+    name: ✍️ Sign (repository key only)
+    needs: [plan, generate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: repository-signing
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: generation-unsigned
+          path: generation
+      - name: 🚦 Provisioning
+        run: |
+          if grep -q '00000000-0000-0000-0000-000000000002' .github/actions/load-repository-signing/action.yml; then
+            echo "::error::repository-signing is not provisioned (placeholder UUID). See README Provisioning."; exit 1
+          fi
+      - name: 🔐 Load the repository key
+        uses: ./.github/actions/load-repository-signing
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+      - name: ✍️ Sign InRelease, Release.gpg, repomd.xml.asc
+        env:
+          FPR: ${{ needs.plan.outputs.fingerprint }}
+        run: bash scripts/release/pkgrepo-sign.sh --generation generation --key-fingerprint "$FPR" --private-key-env PACKAGES_REPO_SIGNING_KEY
+      - name: 🧼 Scrub the key
+        if: ${{ always() }}
+        run: echo "PACKAGES_REPO_SIGNING_KEY=" >>"$GITHUB_ENV"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: generation-signed
+          path: generation/
+          include-hidden-files: true
+          retention-days: 30
+
+  staged:
+    name: 🧪 Verify and install before publication
+    needs: sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: generation-signed
+          path: generation
+      - name: 🧰 Pinned tools image
+        run: make tools-image
+      - name: 🔏 Verify with public keys only
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/w -w /w ppc-tools \
+            bash scripts/release/pkgrepo-verify.sh --generation generation --inventory "$INVENTORY"
+      - name: 🧪 Every supported row, through the staged generation
+        run: |
+          set -euo pipefail
+          mkdir -p tls
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=packages.porta.codes \
+            -addext subjectAltName=DNS:packages.porta.codes -keyout tls/tls-key.pem -out tls/tls-cert.pem 2>/dev/null
+          chmod 644 tls/tls-key.pem
+          bash scripts/surface/client-rows.sh --inventory "$INVENTORY" --policy surface/admission.json --serve generation --tls-dir tls
+
+  publish:
+    name: 🚀 Publish and activate
+    needs: [plan, staged]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: repository-publication
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: generation-signed
+          path: generation
+      - name: 🧰 rpmkeys (the publisher re-verifies before any write)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm >/dev/null
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/packages-porta-codes-publisher
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: 🚀 Publish
+        env:
+          PKGREPO_BUCKET: packages.porta.codes
+          PARENT: ${{ needs.plan.outputs.parent }}
+        run: |
+          bash scripts/release/pkgrepo-publish.sh --generation generation --inventory "$INVENTORY" \
+            --adapter scripts/release/adapters/s3-object-adapter.sh --expected-parent "$PARENT"
+
+  read-back:
+    name: 🔁 Read back with real clients
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: generation-signed
+          path: generation
+      - name: 🔁 The live pointer names this generation
+        run: |
+          set -euo pipefail
+          want="$(jq -r .generation_id generation/.generation.json)"
+          got="$(curl -fsS -H 'Cache-Control: no-cache' "$POINTER_URL" | jq -r '"\(.generation_id) \(.state)"')"
+          [ "$got" = "$want active" ] || { echo "::error::live pointer is '$got', expected '$want active'"; exit 1; }
+      - name: 🔁 Every supported row, from https://packages.porta.codes/
+        run: bash scripts/surface/client-rows.sh --inventory "$INVENTORY" --policy surface/admission.json

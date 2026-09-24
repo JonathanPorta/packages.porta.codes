@@ -1,0 +1,63 @@
+name: CI
+
+# Static checks, the surface and inventory validation, and the offline end-to-end
+# harness (ephemeral keys, demo packages, real Debian 13 apt and Fedora 44 dnf5
+# clients). No secret is available to, or needed by, anything here.
+#
+# Admission PRs are opened by admit-candidate.yml with GITHUB_TOKEN, and GitHub
+# does not start pull_request workflows for those: run this workflow on the
+# admission branch with workflow_dispatch (the PR body says so).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 🔎 check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: 🧰 Tools (yq and actionlint pinned by version and sha256)
+        env:
+          YQ_VERSION: v4.53.2
+          YQ_SHA256: d56bf5c6819e8e696340c312bd70f849dc1678a7cda9c2ad63eebd906371d56b
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck shfmt >/dev/null
+          curl -fsSL -o /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+          curl -fsSL -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/al.tgz" | sha256sum -c -
+          tar -xzf /tmp/al.tgz -C /tmp actionlint && sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: 🔎 make check
+        run: make check
+
+  e2e:
+    name: 🔁 end to end (native x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: 🔁 make test
+        run: make test
