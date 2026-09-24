@@ -1,0 +1,11 @@
+{
+  "_comment": "kioskd's candidate trust store, copied from JonathanPorta/kioskd release-trusted-keys.json at 22b40ae (the key its release ceremony signs with, and the self-updater's anchor). Update ONLY together with that file; never from a candidate.",
+  "schema": "blessed/signing-trust-store/v1",
+  "keys": {
+    "kioskitd-2026-01": {
+      "profile": "ed25519-detached-v1",
+      "public_key_base64": "PTd5F+ilIM5ZBp9mDjQ83num4nDnhDwv9G6Vf7kzA/Q=",
+      "status": "active"
+    }
+  }
+}
