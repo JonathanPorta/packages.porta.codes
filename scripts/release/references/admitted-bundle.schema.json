@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/admitted-bundle/v1",
+  "title": "blessed/admitted-bundle/v1",
+  "description": "The manifest of a CLOSED ADMISSION BUNDLE. It records commitments to every input admission checked and the identity it selected. It is NOT a credential and NOT an authenticator: it is a plain caller-writable file, and recomputing its hashes proves only internal consistency. Anyone who can write it can write any admission_id they like. It is therefore never trusted on its own \u2014 render and apply re-run the same fail-closed verifier over the bundle's actual bytes, including re-verifying the candidate signature, before doing anything. Its value is that it names exactly which inputs an actionable stage must re-verify, so a later stage cannot be handed a different candidate, policy, receipt, or surface than the one admitted. This design assumes one continuous trusted execution boundary; moving a bundle through untrusted jobs or storage would require a receiver-authenticated signed or attested envelope, which is deliberately out of scope here.",
+  "type": "object",
+  "required": [
+    "schema",
+    "admission_id",
+    "selected",
+    "identity",
+    "receiver",
+    "commitments",
+    "signature_verification"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "blessed/admitted-bundle/v1"
+    },
+    "admission_id": {
+      "description": "Digest over the canonical commitment set. Identifies the bundle; asserts nothing about its authenticity.",
+      "$ref": "#/$defs/sha256"
+    },
+    "selected": {
+      "type": "object",
+      "required": [
+        "surface_id",
+        "channel"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "surface_id": {
+          "$ref": "#/$defs/token"
+        },
+        "channel": {
+          "$ref": "#/$defs/token"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "project",
+        "version",
+        "tag",
+        "producer_repo",
+        "producer_sha",
+        "release_id",
+        "published_at",
+        "candidate_created_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/token"
+        },
+        "component": {
+          "$ref": "#/$defs/token"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "producer_repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "producer_sha": {
+          "$ref": "#/$defs/sha40"
+        },
+        "release_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "candidate_created_at": {
+          "description": "Carried VERBATIM from the candidate manifest's created_at, which is `format: date-time` with no further restriction. This field previously also demanded a Z suffix, which no upstream schema requires: a producer emitting a legal RFC3339 numeric offset (git's %cI does exactly that) produced a valid candidate that could never be admitted, because bundle-verify.sh binds this field to the candidate's value verbatim. The binding is the invariant worth keeping; the extra pattern only made the two contracts disagree.",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "receiver": {
+      "description": "The EXPLICITLY TRUSTED receiver repository and base commit. Surface, policy, and live state are read from tracked blobs at this SHA, never from a working copy that any caller could edit.",
+      "type": "object",
+      "required": [
+        "repo",
+        "base_sha"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/sha40"
+        }
+      }
+    },
+    "commitments": {
+      "type": "object",
+      "required": [
+        "event",
+        "candidate",
+        "candidate_signature",
+        "receipt",
+        "attestation",
+        "surfaces",
+        "renderer_config",
+        "trust_store"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidate": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidate_signature": {
+          "$ref": "#/$defs/sha256"
+        },
+        "receipt": {
+          "$ref": "#/$defs/sha256"
+        },
+        "attestation": {
+          "$ref": "#/$defs/sha256"
+        },
+        "trust_store": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest of the trust store admission used. The bytes are NOT carried in the bundle and must be supplied out-of-band to every later stage; this commitment is what proves the store they were given is the one that was admitted."
+        },
+        "surfaces": {
+          "$ref": "#/$defs/blobRef"
+        },
+        "renderer_config": {
+          "$ref": "#/$defs/blobRefOrNone"
+        }
+      }
+    },
+    "signature_verification": {
+      "description": "Actionable admission REQUIRES verified=true. There is no unsigned actionable path.",
+      "type": "object",
+      "required": [
+        "verified",
+        "profile",
+        "key_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verified": {
+          "const": true
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha40": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^(?=[^/]{1,39}/)[A-Za-z0-9](-?[A-Za-z0-9])*/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$"
+    },
+    "blobRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._][A-Za-z0-9._/-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "blobRefOrNone": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/blobRef"
+        },
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "none": {
+              "const": true
+            }
+          }
+        }
+      ]
+    }
+  }
+}

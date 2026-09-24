@@ -1,0 +1,19 @@
+# Pinned blessed-cicd script categories for this repo (blessed-cicd scripts/INSTALL.md).
+# `make sync-scripts` installs them; `make verify-scripts` checks MANIFEST.sha256.
+BCICD_REPO_SLUG=JonathanPorta/blessed-cicd
+
+# BWS loader (sm-action-run.sh) and the authority-domain bootstrapper.
+BWS_VERSION=1.9.1
+BWS_TAG=bws-v1.9.1
+
+# rpm-finalize.sh (LP-9, used by producers) and the candidate verifier.
+# UNRELEASED — confirm on tag: signing 0.3.0 is blessed-cicd #306. Until the tag
+# exists, scripts/signing is vendored from that PR's head; see scripts/VENDORED-FROM.
+SIGNING_VERSION=0.3.0
+SIGNING_TAG=signing-v0.3.0
+
+# Candidate validation and the package-repository tooling (pkgrepo-*.sh).
+# UNRELEASED — confirm on tag: release 0.5.0 is blessed-cicd #308. Until the tag
+# exists, scripts/release is vendored from that PR's head; see scripts/VENDORED-FROM.
+RELEASE_VERSION=0.5.0
+RELEASE_TAG=release-v0.5.0

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/release-candidate-ready/v1",
+  "title": "blessed/release-candidate-ready/v1",
+  "description": "The candidate-ready event body (repository_dispatch client_payload, or the same object under any other transport). The event is a SIGNAL, NOT AUTHENTICATION: GitHub exposes no cryptographically authenticated source repository for a dispatch, and github.actor proves nothing about the producer. Every claim here is UNTRUSTED until admission proves it equals the corresponding fact in the signed candidate, the allowlisted producer, and the exact Release/tag. This schema exists so there is exactly one strict parser instead of a fourth hand-written one.",
+  "type": "object",
+  "required": ["schema", "candidate", "promotion"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/release-candidate-ready/v1" },
+    "candidate": {
+      "type": "object",
+      "required": ["project", "version", "tag", "producer_repo", "producer_sha", "manifest_url", "manifest_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "project": { "$ref": "#/$defs/token" },
+        "component": { "$ref": "#/$defs/token" },
+        "version": { "$ref": "#/$defs/version" },
+        "tag": { "$ref": "#/$defs/tag" },
+        "producer_repo": { "$ref": "#/$defs/repo" },
+        "producer_sha": { "$ref": "#/$defs/sha40" },
+        "manifest_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "public_notes_url": { "type": "string", "format": "uri", "pattern": "^https://" }
+      }
+    },
+    "promotion": {
+      "type": "object",
+      "required": ["surface_id", "surface_kind", "surface_repo", "channel", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "surface_id": { "$ref": "#/$defs/token" },
+        "surface_kind": { "const": "public-download-surface" },
+        "surface_repo": { "$ref": "#/$defs/repo" },
+        "channel": { "$ref": "#/$defs/token" },
+        "kind": { "const": "channel-pointer-pr" }
+      }
+    }
+  },
+  "$defs": {
+    "token": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": {
+      "description": "Project B v1 supports canonical numeric MAJOR.MINOR.PATCH only. Prereleases are OPERATIONALLY unsupported here even though the candidate schema accepts them: they have no defined promotion order, and guessing one is how a downgrade slips through.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "tag": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "repo": { "type": "string", "pattern": "^(?=[^/]{1,39}/)[A-Za-z0-9](-?[A-Za-z0-9])*/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$" },
+    "sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

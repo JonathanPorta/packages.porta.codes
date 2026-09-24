@@ -1,0 +1,21 @@
+{
+  "schema": "blessed/release-candidate-ready/v1",
+  "candidate": {
+    "project": "docsort",
+    "component": "docsort-desktop",
+    "version": "0.4.3",
+    "tag": "v0.4.3",
+    "producer_repo": "JonathanPorta/docsort",
+    "producer_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+    "manifest_url": "https://api.github.com/repos/JonathanPorta/docsort/releases/assets/1",
+    "manifest_sha256": "c0ad731a5652a61324405a2c7e7939423cddfcad2b5919a71d539254d5c70269",
+    "public_notes_url": "https://api.github.com/repos/JonathanPorta/docsort/releases/assets/2"
+  },
+  "promotion": {
+    "surface_id": "public-downloads",
+    "surface_kind": "public-github-mirror",
+    "surface_repo": "JonathanPorta/docsort.io",
+    "channel": "stable",
+    "kind": "channel-pointer-pr"
+  }
+}

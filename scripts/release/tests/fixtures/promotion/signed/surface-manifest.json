@@ -1,0 +1,47 @@
+{
+  "schema": "blessed/public-download-manifest/v1",
+  "project": "pilot",
+  "tag": "v0.4.3",
+  "version": "0.4.3",
+  "channel": "stable",
+  "release": {
+    "name": "pilot v0.4.3",
+    "notes_markdown_url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/release-notes-public.md",
+    "published_at": "2026-08-13T01:24:49Z"
+  },
+  "candidate": {
+    "manifest_sha256": "cf5292fb0d5a22e9878e5e30037dcccd7d2c0f03b5a197394cbd826dd1b1d691",
+    "manifest_url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/release-candidate.json",
+    "signing_key_id": "pilot-fixture-2026-08",
+    "source_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84"
+  },
+  "assets": [
+    {
+      "filename": "pilot_0.4.3_amd64.AppImage",
+      "id": "linux-appimage",
+      "install_kind": "appimage",
+      "platform": "linux/amd64",
+      "sha256": "8015b22e26404d2de38483d7bfce58978bec6e9620b6cadf3464f4a018d1ae3f",
+      "size_bytes": 20,
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_amd64.AppImage"
+    },
+    {
+      "filename": "pilot_0.4.3_aarch64.dmg",
+      "id": "macos-dmg",
+      "install_kind": "dmg",
+      "platform": "darwin/arm64",
+      "sha256": "db61aded55aa5097aaba03ae1ac373bcae2a7e57545d9f74ea6a90e31448e409",
+      "size_bytes": 20,
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_aarch64.dmg"
+    },
+    {
+      "filename": "latest.json",
+      "id": "updater-feed",
+      "install_kind": "other",
+      "platform": "any",
+      "sha256": "710d2704559f1c5bb19e29a1d5b4da792af8ecbbb91adbef5a188c1200b27ba0",
+      "size_bytes": 664,
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/latest.json"
+    }
+  ]
+}

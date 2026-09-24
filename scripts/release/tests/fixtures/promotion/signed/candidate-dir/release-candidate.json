@@ -1,0 +1,106 @@
+{
+  "artifacts": [
+    {
+      "filename": "pilot_0.4.3_amd64.AppImage",
+      "id": "linux-appimage",
+      "install_kind": "appimage",
+      "platform": "linux/amd64",
+      "sha256": "8015b22e26404d2de38483d7bfce58978bec6e9620b6cadf3464f4a018d1ae3f",
+      "signature": "pilot_0.4.3_amd64.AppImage.sig",
+      "size": 20
+    },
+    {
+      "filename": "pilot_0.4.3_aarch64.dmg",
+      "id": "macos-dmg",
+      "install_kind": "dmg",
+      "platform": "darwin/arm64",
+      "sha256": "db61aded55aa5097aaba03ae1ac373bcae2a7e57545d9f74ea6a90e31448e409",
+      "signature": "pilot_0.4.3_aarch64.dmg.sig",
+      "size": 20
+    },
+    {
+      "filename": "latest.json",
+      "id": "updater-feed",
+      "install_kind": "other",
+      "platform": "any",
+      "sha256": "710d2704559f1c5bb19e29a1d5b4da792af8ecbbb91adbef5a188c1200b27ba0",
+      "signature": "latest.json.sig",
+      "size": 664
+    }
+  ],
+  "build_sha": "5f2b9c7d0a41e836b95c2d7e08a4f61b3c9d5e27",
+  "component": "pilot-desktop",
+  "created_at": "2026-08-13T01:02:56Z",
+  "files": [
+    {
+      "name": "SHA256SUMS",
+      "role": "checksums",
+      "sha256": "6540a3a48fa2434048b8882c2acb1d1c79aac7d6459dc7c68a0ca7730aa5077b",
+      "size": 706
+    },
+    {
+      "name": "latest.json",
+      "role": "artifact",
+      "sha256": "710d2704559f1c5bb19e29a1d5b4da792af8ecbbb91adbef5a188c1200b27ba0",
+      "size": 664
+    },
+    {
+      "name": "latest.json.sig",
+      "role": "signature",
+      "sha256": "0716c223d3e0640bba07d71973fc69ac465ad7899337034d90623b144ecdb15d",
+      "size": 88
+    },
+    {
+      "name": "pilot_0.4.3_aarch64.dmg",
+      "role": "artifact",
+      "sha256": "db61aded55aa5097aaba03ae1ac373bcae2a7e57545d9f74ea6a90e31448e409",
+      "size": 20
+    },
+    {
+      "name": "pilot_0.4.3_aarch64.dmg.sig",
+      "role": "signature",
+      "sha256": "3ad428152e63e63a6daf7c2533dc6ba68ac0074e105a1b4d0f1d7388fae09c4c",
+      "size": 88
+    },
+    {
+      "name": "pilot_0.4.3_amd64.AppImage",
+      "role": "artifact",
+      "sha256": "8015b22e26404d2de38483d7bfce58978bec6e9620b6cadf3464f4a018d1ae3f",
+      "size": 20
+    },
+    {
+      "name": "pilot_0.4.3_amd64.AppImage.sig",
+      "role": "signature",
+      "sha256": "32225d4c8f79c5fd2ed41541152d88ebd94d2087dd6861af805584c91ff86a31",
+      "size": 88
+    },
+    {
+      "name": "provenance.json",
+      "role": "provenance",
+      "sha256": "f11503a03bc2dfb90b004c2418ee8e5e30602972e13d415a2017db9b607c7dbf",
+      "size": 395
+    },
+    {
+      "name": "release-notes-public.md",
+      "role": "notes",
+      "sha256": "790b8d597d4d99f0b088bbf850acb238196478e153e6ce3581e7d1f40f0a2197",
+      "size": 37
+    }
+  ],
+  "producer_repo": "JonathanPorta/pilot",
+  "project": "pilot",
+  "public_notes": {
+    "filename": "release-notes-public.md",
+    "sha256": "790b8d597d4d99f0b088bbf850acb238196478e153e6ce3581e7d1f40f0a2197"
+  },
+  "schema": "blessed/release-candidate/v1",
+  "signing": {
+    "artifacts": "required",
+    "key_id": "pilot-fixture-2026-08",
+    "manifest_signature": "release-candidate.json.sig",
+    "profile": "ed25519-detached-v1"
+  },
+  "source_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+  "tag": "v0.4.3",
+  "version": "0.4.3"
+}

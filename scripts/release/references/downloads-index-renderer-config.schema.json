@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/downloads-index-renderer-config/v1",
+  "title": "blessed/downloads-index-renderer-config/v1",
+  "description": "CLOSED DATA declaring the presentation policy a downloads index cannot derive from a signed candidate: labels, primary choices, os/arch presentation, kind naming, site-facing MIME, and which artifacts are downloads at all. This is NOT a renderer language. There are no templates, expressions, regexes, globs, includes, code, environment or network access, and no arbitrary output keys. It may never supply URLs, filenames, hashes, versions, tags, timestamps, notes, serialization controls, or history instructions — those belong to the signed candidate, the surface declaration, or the receiver base state. Every candidate artifact must be classified EXACTLY ONCE as include or exclude; an unclassified, missing, duplicate, or unknown artifact id fails closed rather than being inferred from a filename or extension.",
+  "type": "object",
+  "required": ["schema", "target_format", "artifacts"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/downloads-index-renderer-config/v1" },
+    "target_format": {
+      "description": "The foreign index format this bounded adapter emits. A single const: supporting another format requires new Blessed code, schema, controls, review, and a release — not a plugin.",
+      "const": "docsort.io/downloads-index/v1"
+    },
+    "artifacts": {
+      "description": "Exhaustive classification keyed by the candidate's artifact id. Every candidate artifact must appear exactly once.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/classification" }
+    }
+  },
+  "$defs": {
+    "token": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "classification": {
+      "description": "Exactly one of include or exclude. `oneOf` forbids declaring both.",
+      "type": "object",
+      "oneOf": [
+        { "required": ["include"], "not": { "required": ["exclude"] } },
+        { "required": ["exclude"], "not": { "required": ["include"] } }
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "include": { "$ref": "#/$defs/presentation" },
+        "exclude": {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "description": "Why this artifact is not a user-facing download. Required so an omission is always a decision rather than an oversight.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
+      }
+    },
+    "presentation": {
+      "description": "The ONLY values policy may supply. Everything else in the rendered asset comes from the signed candidate or the surface declaration.",
+      "type": "object",
+      "required": ["id", "label", "os", "arch", "kind", "primary", "content_type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Output asset id. Declared, never transformed from the candidate id by rule.",
+          "$ref": "#/$defs/token"
+        },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "os": { "enum": ["macos", "windows", "linux", "any"] },
+        "arch": {
+          "description": "Presentation-level architecture. May be the empty string when the site deliberately does not show one; that is a declared choice, not an inference.",
+          "type": "string",
+          "maxLength": 32,
+          "pattern": "^([a-z0-9_-]{1,32})?$"
+        },
+        "kind": { "$ref": "#/$defs/token" },
+        "primary": { "type": "boolean" },
+        "content_type": {
+          "description": "SITE-FACING MIME for the download index. This is a DIFFERENT authority from receiver-publication.json, which governs object-serving metadata and currently disagrees for .dmg. They are deliberately not merged here.",
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        }
+      }
+    }
+  }
+}

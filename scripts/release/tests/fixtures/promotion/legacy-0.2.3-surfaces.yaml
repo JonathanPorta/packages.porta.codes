@@ -1,0 +1,32 @@
+# FROZEN LEGACY FIXTURE — do not "modernize" this file.
+#
+# It is a declaration that was valid under release 0.2.3, before renderer_config
+# existed. It proves two things at once:
+#   1. adding renderer_config did not invalidate any existing declaration;
+#   2. selecting its downloads-index output nonetheless FAILS admission, with the
+#      exact missing-renderer-config reason rather than a guess.
+schema: blessed/release-surfaces/v1
+product: docsort
+surfaces:
+  - id: public-downloads
+    kind: public-download-surface
+    owner_repo: JonathanPorta/docsort.io
+    producer_repos:
+      - JonathanPorta/docsort
+    consumer_contract:
+      - browser-download
+      - tauri-static-updater
+    access_model: public-anonymous
+    publisher_model: surface-pull
+    promotion_transport: repository_dispatch
+    public_base_url: https://www.docsort.io/downloads/docsort/
+    immutable_release_prefix: releases/
+    promotion_outputs:
+      - id: stable-channel
+        role: channel-pointer
+        channel: stable
+        repo_path: src/static/downloads/docsort/channels/stable.json
+        public_path: channels/stable.json
+      - id: downloads-index
+        role: downloads-index
+        repo_path: src/data/downloads.json

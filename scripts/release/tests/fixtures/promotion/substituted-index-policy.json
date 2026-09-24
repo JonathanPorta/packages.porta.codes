@@ -1,0 +1,22 @@
+{
+  "schema": "blessed/downloads-index-renderer-config/v1",
+  "target_format": "docsort.io/downloads-index/v1",
+  "artifacts": {
+    "macos-arm64-dmg": {
+      "include": {
+        "id": "macos-arm64",
+        "label": "macOS (Apple Silicon)",
+        "os": "macos",
+        "arch": "arm64",
+        "kind": "dmg",
+        "primary": true,
+        "content_type": "application/x-apple-diskimage"
+      }
+    },
+    "macos-arm64-updater": {
+      "exclude": {
+        "reason": "Tauri updater payload; consumed by the installed client, never offered as a site download."
+      }
+    }
+  }
+}

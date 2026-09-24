@@ -1,0 +1,16 @@
+scripts/bws      bws-v1.9.1 — the released tarball (gh release download), MANIFEST verified.
+
+scripts/release  release 0.5.0 — NOT YET RELEASED. Vendored with
+                 `git -C ../blessed-cicd archive 778ed09 scripts/release`
+                 (JonathanPorta/blessed-cicd #308, branch jp/f/pkgrepo-tooling).
+scripts/signing  signing 0.3.0 — NOT YET RELEASED. Vendored with
+                 `git -C ../blessed-cicd archive 983e29e scripts/signing`
+                 (JonathanPorta/blessed-cicd #306, branch jp/f/rpm-finalize).
+
+Both MANIFEST.sha256 files verify. When release-v0.5.0 and signing-v0.3.0 are
+tagged, run `make sync-scripts`: it must reproduce these trees exactly (any
+diff means the released bytes differ from the reviewed head), then delete this
+file.
+
+tests/fixtures/fake-store-adapter.sh is copied from the same blessed commit
+(778ed09, tests/fixtures/pkgrepo/).

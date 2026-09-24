@@ -1,0 +1,35 @@
+schema: blessed/release-surfaces/v1
+product: pilot
+surfaces:
+  - id: public-downloads
+    kind: public-download-surface
+    owner_repo: JonathanPorta/pilot.example
+    producer_repos:
+      - JonathanPorta/pilot
+    consumer_contract:
+      - browser-download
+    access_model: public-anonymous
+    publisher_model: surface-pull
+    promotion_transport: repository_dispatch
+    public_base_url: https://www.pilot.example/downloads/pilot/
+    immutable_release_prefix: releases/
+    promotion_outputs:
+      - id: stable-channel
+        role: channel-pointer
+        channel: stable
+        repo_path: src/static/downloads/pilot/channels/stable.json
+        public_path: channels/stable.json
+      - id: beta-channel
+        role: channel-pointer
+        channel: beta
+        repo_path: src/static/downloads/pilot/channels/beta.json
+        public_path: channels/beta.json
+      - id: updater-stable
+        role: updater-pointer
+        channel: stable
+        repo_path: src/static/downloads/pilot/updater/stable/latest.json
+        public_path: updater/stable/latest.json
+      - id: downloads-index
+        role: downloads-index
+        repo_path: src/data/downloads.json
+        renderer_config: receiver-downloads-index-policy.json

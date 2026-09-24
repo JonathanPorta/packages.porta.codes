@@ -1,0 +1,4 @@
+{
+  "_comment": "MUTATION CONTROL. Object-serving metadata that DISAGREES with the site-facing MIME for .dmg. A renderer that consults this file renders application/octet-stream; the correct renderer ignores it entirely and renders application/x-apple-diskimage from renderer_config.",
+  "content_types": { ".dmg": "application/octet-stream", ".tar.gz": "application/octet-stream" }
+}

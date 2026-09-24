@@ -1,0 +1,9 @@
+[
+  { "number": 7, "state": "closed", "merged_at": "2026-08-13T01:24:49Z",
+    "merge_commit_sha": "cccccccccccccccccccccccccccccccccccccccc",
+    "head": { "repo": { "full_name": "JonathanPorta/pilot.example" },
+              "ref": "promote/public-downloads/stable/0.4.3",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    "base": { "repo": { "full_name": "JonathanPorta/pilot.example" },
+              "ref": "main", "sha": "1111111111111111111111111111111111111111" } }
+]

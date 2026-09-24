@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/updater-pointer/v1",
+  "title": "blessed/updater-pointer/v1 (structural check for a byte-copied file)",
+  "description": "Structural description of the Tauri static updater feed the PRODUCER builds and signs into the candidate as latest.json. Blessed does NOT compose this file: it is copied byte-for-byte from the verified candidate, because re-serializing a signed feed would change bytes an installed client may compare, and because composing it here would create a second author for facts the producer already signed. This schema exists only to validate the bytes before copying them. `pub_date` is the CANDIDATE's created_at, not the Release published_at — the updater feed records when the build was produced, which is a different fact from when the Release was published, and byte-copying preserves whichever the producer wrote.",
+  "type": "object",
+  "required": ["version", "pub_date", "platforms"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "notes": { "type": "string" },
+    "pub_date": {
+      "description": "CANDIDATE-DERIVED. Whatever RFC 3339 form the producer put in the candidate reaches here, and the candidate contract permits a numeric offset, so this field must too: a conforming, correctly signed candidate carrying an offset otherwise validated cleanly and then died in the renderer, with no output and nothing to fix in the producer. This is NOT the Release publication time — see published_at in public-download-channel.schema.json, which is carried verbatim from the Release receipt and deliberately stays Z-only.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "platforms": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z0-9]+-[a-z0-9_]+$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["signature", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "signature": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9+/=]+$" },
+          "url": { "type": "string", "format": "uri", "pattern": "^https://" }
+        }
+      }
+    }
+  }
+}

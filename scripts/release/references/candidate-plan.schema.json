@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/release-candidate-plan/v1",
+  "title": "blessed/release-candidate-plan/v1",
+  "description": "The EXPLICIT producer-generated plan that scripts/release/build-candidate.sh consumes. The producer states identity, signing intent, public-notes filename, and each artifact's id/filename/platform/install_kind (and optional sbom) — with NO sizes or hashes and NO filename inference. The shared tool verifies every referenced file exists, computes size + SHA-256, builds SHA256SUMS + provenance + the closed `files` set, and emits release-candidate.json.",
+  "type": "object",
+  "$defs": {
+    "fullSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "safeBasename": {
+      "description": "Basename only — no path separators, no traversal, no leading dot.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+    }
+  },
+  "required": [
+    "schema",
+    "project",
+    "component",
+    "version",
+    "tag",
+    "producer_repo",
+    "source_sha",
+    "build_sha",
+    "created_at",
+    "signing",
+    "public_notes",
+    "artifacts"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/release-candidate-plan/v1" },
+    "project": { "type": "string", "minLength": 1 },
+    "component": { "type": "string", "minLength": 1 },
+    "version": {
+      "description": "Anchored MAJOR.MINOR.PATCH[-PRERELEASE]; no build metadata (matches release-candidate/v1).",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+    },
+    "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" },
+    "producer_repo": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+    "source_sha": { "$ref": "#/$defs/fullSha" },
+    "build_sha": { "$ref": "#/$defs/fullSha" },
+    "created_at": {
+      "description": "Caller-supplied RFC3339 timestamp — the tool never reads the clock, so a rerun is byte-identical.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "signing": {
+      "type": "object",
+      "required": ["profile", "key_id", "artifacts"],
+      "additionalProperties": false,
+      "properties": {
+        "profile": { "const": "ed25519-detached-v1" },
+        "key_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "artifacts": { "type": "string", "enum": ["required", "optional"] }
+      }
+    },
+    "public_notes": { "$ref": "#/$defs/safeBasename" },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "filename", "platform", "install_kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+          "filename": { "$ref": "#/$defs/safeBasename" },
+          "platform": {
+            "type": "string",
+            "pattern": "^(any|[a-z0-9]+/[a-z0-9_]+)$"
+          },
+          "install_kind": {
+            "type": "string",
+            "enum": ["binary", "tarball", "appimage", "dmg", "msi", "exe", "rpm", "deb", "archive", "image", "other"]
+          },
+          "signature_profile": {
+            "description": "Optional runtime-native artifact signature profile carried into the candidate (releases.candidate@1). v1 recognizes the Tauri native updater adapter only. Must be declared with signature_key_id and a per-artifact signature sidecar.",
+            "type": "string",
+            "const": "tauri-minisign-v1"
+          },
+          "signature_key_id": {
+            "description": "Optional runtime-native artifact key id carried into the candidate. Must be declared with signature_profile.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "sbom": { "$ref": "#/$defs/safeBasename" }
+        }
+      }
+    }
+  }
+}

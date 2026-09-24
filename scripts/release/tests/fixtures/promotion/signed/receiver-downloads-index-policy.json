@@ -1,0 +1,33 @@
+{
+  "schema": "blessed/downloads-index-renderer-config/v1",
+  "target_format": "docsort.io/downloads-index/v1",
+  "artifacts": {
+    "linux-appimage": {
+      "include": {
+        "id": "linux-appimage",
+        "label": "Linux (AppImage)",
+        "os": "linux",
+        "arch": "",
+        "kind": "appimage",
+        "primary": true,
+        "content_type": "application/octet-stream"
+      }
+    },
+    "macos-dmg": {
+      "include": {
+        "id": "macos-dmg",
+        "label": "macOS (.dmg)",
+        "os": "macos",
+        "arch": "",
+        "kind": "dmg",
+        "primary": true,
+        "content_type": "application/x-apple-diskimage"
+      }
+    },
+    "updater-feed": {
+      "exclude": {
+        "reason": "Updater feed consumed by the installed client, never a site download."
+      }
+    }
+  }
+}

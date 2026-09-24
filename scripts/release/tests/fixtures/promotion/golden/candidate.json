@@ -1,0 +1,204 @@
+{
+  "artifacts": [
+    {
+      "filename": "DocSort_0.4.3_amd64.AppImage",
+      "id": "linux-appimage",
+      "install_kind": "appimage",
+      "platform": "linux/amd64",
+      "sha256": "a1f28ea3eda4b9c1c67686f477b7d79ec3e05715a6fa87bbc8019bde278b1762",
+      "signature": "DocSort_0.4.3_amd64.AppImage.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 86919672
+    },
+    {
+      "filename": "DocSort_0.4.3_amd64.deb",
+      "id": "linux-deb",
+      "install_kind": "deb",
+      "platform": "linux/amd64",
+      "sha256": "c6faf3b0204a7a9108bbab07d2a2231fe7903d232e2398e885e835ae2b1775c1",
+      "signature": "DocSort_0.4.3_amd64.deb.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 11283016
+    },
+    {
+      "filename": "DocSort-0.4.3-macos.app.zip",
+      "id": "macos-appzip",
+      "install_kind": "archive",
+      "platform": "darwin/arm64",
+      "sha256": "c345f4cbbb38fbc7bf122fc72f13d3afef1bfa1bc1fcd864d44b28990c27de1f",
+      "signature": "DocSort-0.4.3-macos.app.zip.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 9791856
+    },
+    {
+      "filename": "DocSort_0.4.3_aarch64.dmg",
+      "id": "macos-dmg",
+      "install_kind": "dmg",
+      "platform": "darwin/arm64",
+      "sha256": "df0de5a1abb8ee62ed7ce18de02501e7674f7a2efd7176385335be9f971d318f",
+      "signature": "DocSort_0.4.3_aarch64.dmg.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 10133610
+    },
+    {
+      "filename": "DocSort.app.tar.gz",
+      "id": "macos-updater",
+      "install_kind": "tarball",
+      "platform": "darwin/arm64",
+      "sha256": "e500000000000000000000000000000000000000000000000000000000000000",
+      "signature": "DocSort.app.tar.gz.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 9791000
+    },
+    {
+      "filename": "DocSort_0.4.3_x64-setup.exe",
+      "id": "windows-exe",
+      "install_kind": "exe",
+      "platform": "windows/x86_64",
+      "sha256": "dcd128098037d17576aed691b040002acce49eed6499accce0a9b1b028607303",
+      "signature": "DocSort_0.4.3_x64-setup.exe.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 37538902
+    },
+    {
+      "filename": "DocSort_0.4.3_x64_en-US.msi",
+      "id": "windows-msi",
+      "install_kind": "msi",
+      "platform": "windows/x86_64",
+      "sha256": "60f3b98076a8a6c248c153375c077e32fe89d1eee0cddc0f7ee7654472650f11",
+      "signature": "DocSort_0.4.3_x64_en-US.msi.sig",
+      "signature_key_id": "0329307E2A827219",
+      "signature_profile": "tauri-minisign-v1",
+      "size": 53248000
+    }
+  ],
+  "build_sha": "5f2b9c7d0a41e836b95c2d7e08a4f61b3c9d5e27",
+  "component": "docsort-desktop",
+  "created_at": "2026-08-13T01:02:56Z",
+  "files": [
+    {
+      "name": "DocSort-0.4.3-macos.app.zip",
+      "role": "artifact",
+      "sha256": "c345f4cbbb38fbc7bf122fc72f13d3afef1bfa1bc1fcd864d44b28990c27de1f",
+      "size": 9791856
+    },
+    {
+      "name": "DocSort-0.4.3-macos.app.zip.sig",
+      "role": "signature",
+      "sha256": "a1924e2f626892c95c647ce9f4f739578ba804d16f2e23c770a84de37fb914c2",
+      "size": 566
+    },
+    {
+      "name": "DocSort.app.tar.gz",
+      "role": "artifact",
+      "sha256": "e500000000000000000000000000000000000000000000000000000000000000",
+      "size": 9791000
+    },
+    {
+      "name": "DocSort.app.tar.gz.sig",
+      "role": "signature",
+      "sha256": "c431f39f5d1102565360adebda75c287b4a962faad0e18e2d7034dbb1518a9f5",
+      "size": 566
+    },
+    {
+      "name": "DocSort_0.4.3_aarch64.dmg",
+      "role": "artifact",
+      "sha256": "df0de5a1abb8ee62ed7ce18de02501e7674f7a2efd7176385335be9f971d318f",
+      "size": 10133610
+    },
+    {
+      "name": "DocSort_0.4.3_aarch64.dmg.sig",
+      "role": "signature",
+      "sha256": "af5408320dcb7e0a564e451f052519454e84698b00f8a8859087b8649f13c8aa",
+      "size": 566
+    },
+    {
+      "name": "DocSort_0.4.3_amd64.AppImage",
+      "role": "artifact",
+      "sha256": "a1f28ea3eda4b9c1c67686f477b7d79ec3e05715a6fa87bbc8019bde278b1762",
+      "size": 86919672
+    },
+    {
+      "name": "DocSort_0.4.3_amd64.AppImage.sig",
+      "role": "signature",
+      "sha256": "05c5036deace3f69eabf97aa40cd0734c021cb49a8bc389f8b34769f5a92f065",
+      "size": 566
+    },
+    {
+      "name": "DocSort_0.4.3_amd64.deb",
+      "role": "artifact",
+      "sha256": "c6faf3b0204a7a9108bbab07d2a2231fe7903d232e2398e885e835ae2b1775c1",
+      "size": 11283016
+    },
+    {
+      "name": "DocSort_0.4.3_amd64.deb.sig",
+      "role": "signature",
+      "sha256": "90d8b65df8946d822d111fe9b6bfd4d84b6e56057161c92aea0f2b69a9598b5e",
+      "size": 566
+    },
+    {
+      "name": "DocSort_0.4.3_x64-setup.exe",
+      "role": "artifact",
+      "sha256": "dcd128098037d17576aed691b040002acce49eed6499accce0a9b1b028607303",
+      "size": 37538902
+    },
+    {
+      "name": "DocSort_0.4.3_x64-setup.exe.sig",
+      "role": "signature",
+      "sha256": "c0d81469bdb758577e1951782f542bfc506da848a019517f4b8f170a238750d3",
+      "size": 566
+    },
+    {
+      "name": "DocSort_0.4.3_x64_en-US.msi",
+      "role": "artifact",
+      "sha256": "60f3b98076a8a6c248c153375c077e32fe89d1eee0cddc0f7ee7654472650f11",
+      "size": 53248000
+    },
+    {
+      "name": "DocSort_0.4.3_x64_en-US.msi.sig",
+      "role": "signature",
+      "sha256": "6d6a917c91449a5dfcf35e106f7b65055898c4566711a6ea5fbda7ed5f56510a",
+      "size": 566
+    },
+    {
+      "name": "SHA256SUMS",
+      "role": "checksums",
+      "sha256": "e6351d3766186d2b4d187ee3c1613bf7516a35fd9b3207d9bf72fc7c2576e076",
+      "size": 712
+    },
+    {
+      "name": "latest.json",
+      "role": "other",
+      "sha256": "6df30c74f689a91025671c2f5a132d6090084138fb942b9f6971588db49bc33d",
+      "size": 3928
+    },
+    {
+      "name": "release-notes-public.md",
+      "role": "notes",
+      "sha256": "07391e2ef30900e88aa61cc431e2213753c93e3db19541d7b8729809fff3bab4",
+      "size": 2087
+    }
+  ],
+  "producer_repo": "JonathanPorta/docsort",
+  "project": "docsort",
+  "public_notes": {
+    "filename": "release-notes-public.md",
+    "sha256": "07391e2ef30900e88aa61cc431e2213753c93e3db19541d7b8729809fff3bab4"
+  },
+  "schema": "blessed/release-candidate/v1",
+  "signing": {
+    "artifacts": "required",
+    "key_id": "docsort-manifest-2026-01",
+    "manifest_signature": "release-candidate.json.sig",
+    "profile": "ed25519-detached-v1"
+  },
+  "source_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+  "tag": "v0.4.3",
+  "version": "0.4.3"
+}

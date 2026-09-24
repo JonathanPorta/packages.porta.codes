@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/publication-attestation/v1",
+  "title": "blessed/publication-attestation/v1",
+  "description": "Proof that every immutable object for a candidate is published or independently verified at the surface. The PR application layer REQUIRES a complete attestation bound to the exact candidate, surface plan, immutable manifest, and object set. An event or a plan alone must NEVER authorize a pointer PR: a pointer that goes live before its bytes exist is a broken surface. Modeled on the receiver's docsort.io/surface-publication-attestation/v1 and promoted to a Blessed schema.",
+  "type": "object",
+  "required": ["schema", "candidate_sha256", "surface_id", "channel", "immutable_prefix_url", "complete", "objects"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/publication-attestation/v1" },
+    "candidate_sha256": {
+      "description": "Digest of the exact release-candidate.json these objects were published for. An attestation for a different candidate is a mismatch, not a partial success.",
+      "$ref": "#/$defs/sha256"
+    },
+    "surface_id": { "$ref": "#/$defs/token" },
+    "channel": { "$ref": "#/$defs/token" },
+    "immutable_prefix_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "complete": {
+      "description": "Must be true. A partial publication cannot authorize a pointer move.",
+      "const": true
+    },
+    "objects": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["url", "sha256", "size"],
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "size": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "token": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
