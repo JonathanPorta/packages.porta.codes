@@ -42,16 +42,18 @@ verified and published in CI.
 
    | Job | Authority | Does |
    |---|---|---|
-   | plan | none | validates; reads the live generation (the expected parent) and the inventory's commit time |
+   | plan | none | validates; reads the live **activation revision** (what this run's activation must replace) and the inventory's commit time |
    | fetch | `candidate-ingest` | retained packages from `https://packages.porta.codes/`, new ones from producer releases; every byte checked against the inventory |
    | generate | none | pinned tools image (`tools/`), deterministic, unsigned |
    | sign | `repository-signing` | `InRelease`, `Release.gpg`, `repomd.xml.asc` with the repository key only |
-   | staged | none | verifies with public keys only; then, per supported row, real apt/dnf **install → check → upgrade → remove** against the generation served as `https://packages.porta.codes/` on a private network (throwaway CA trusted by the clients only — the published `.sources`/`.repo` are tested byte for byte) |
-   | publish | `repository-publication` (AWS OIDC) | create-only immutables, a fenced activation claim, conditional entrypoint writes, confirm, read back from the store |
-   | read-back | none | the live pointer names the generation; every row again against the real endpoint |
+   | staged | none | verifies with public keys only; publishes into a local directory store with the same publisher; then, per supported row, real apt/dnf **install → check → upgrade → remove** through the real router in front of that store, answering as `https://packages.porta.codes/` on a private network (throwaway CA trusted by the clients only — the published `.sources`/`.repo` are tested byte for byte) |
+   | publish | `repository-publication` (AWS OIDC) | creates every object once, then ONE conditional write of the activation pointer; records the new revision in the run summary |
+   | read-back | none | the live pointer is this activation; a stable entrypoint is routed to it and served `no-cache`, generation objects are immutable; every row again against the real endpoint |
 
-   Runs are serialized. Re-running a failed run is the resume path: an
-   interrupted activation is taken over, a completed one is a no-op.
+   Runs are serialized. A run whose activation loses its compare-and-swap
+   fails: that attempt is void and is not retried; the next run re-plans.
+   Re-running a run that failed before activating resumes it (objects already
+   created are skipped); a completed one is a no-op.
 
 ## Install
 
@@ -96,12 +98,16 @@ build-only upstream and has no repository here, so it is not admitted.
 
 ## Decisions needed
 
+The complete, itemized package — resources, costs, role policies, keys (new vs
+existing) and the ordered steps — is **[`APPROVAL.md`](APPROVAL.md)**. In short:
+
 1. **Domain and repository** — approve `packages.porta.codes` (zone
    `porta.codes`) and a new repository `JonathanPorta/packages.porta.codes`
    owning it.
 2. **Infrastructure and spend** — one S3 website bucket + Cloudflare proxied
-   CNAME via `s3-static-site` 1.5.0 (`make plan TF_WORKSPACE=production`, then
-   `make deploy`); negligible cost. Plus one bootstrap-owned IAM role
+   CNAME via `s3-static-site` 1.5.0 and one read-only router Worker
+   (`make plan TF_WORKSPACE=production`, then `make deploy`); itemized in
+   `APPROVAL.md`. Plus one bootstrap-owned IAM role
    `packages-porta-codes-publisher` trusting
    `repo:JonathanPorta/packages.porta.codes:environment:repository-publication`
    (Terraform owns only its permissions); set repository variables
@@ -153,13 +159,22 @@ GitHub-hosted runners.
 
 ## Guarantees and limits
 
-- Immutable objects (packages, by-hash indexes, checksum-named repodata, keys,
-  generation records) are **create-only**; the bucket policy refuses any other
-  write to them and any delete by the publisher.
-- Mutable entrypoints (`InRelease`, `repomd.xml(.asc)`, configuration) are
-  cached for 60 s and revalidated. A DNF client that sees `repomd.xml` and its
-  signature from different generations refuses and recovers on refresh.
+- **Nothing a client is served is overwritten.** Every object is created once:
+  shared immutables (packages, by-hash indexes, checksum-named repodata) at
+  their advertised paths, each generation's entrypoints (`InRelease`,
+  `Release`, indexes, `repomd.xml(.asc)`, `.sources`, `.repo`, keys) under
+  `_generations/<generation_id>/`. The bucket policy refuses any publisher
+  write without `If-None-Match` — except the activation pointer, which must
+  carry `If-Match` or `If-None-Match` — and any delete.
+- **Activation is one conditional write, atomic per request.** The router
+  Worker resolves each request for a stable entrypoint URL against the pointer,
+  read uncached, and serves it `no-cache`. An APT/DNF transaction spans several
+  requests and is not atomic: a DNF client whose `repomd.xml` and signature
+  straddle an activation refuses the pair and recovers on refresh.
+- **Every advertised URL stays addressable.** Older generations' by-hash
+  indexes, packages and repodata remain at their URLs; rollback is a new
+  activation of an older generation.
 - No APT `Valid-Until` in the pilot, so there is no forced re-signing schedule;
   the freeze-attack exposure this leaves is accepted and documented.
-- Automated, not unattended: each admission needs an operator to run CI on its
-  PR and an independent review.
+- Automated, not unattended: each admission needs CI on its PR and an
+  independent review (see `APPROVAL.md` for how admission-PR checks are proven).

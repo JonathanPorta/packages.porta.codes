@@ -111,6 +111,11 @@ then paste the named file's CONTENTS into the secret in the Bitwarden web UI.
     each: scripts/bws/bootstrap.sh --app-name <name> --secrets-list .bws/<domain>.list \\
             --loader .github/actions/load-<domain>/action.yml --project-id-file .bws/<domain>.env \\
             --gh-environments <domain> --no-secret-values
+          where <domain> is rpm-signing or release-signing (the producer's
+          Environment of that name; allowed ref main, plus v* tags if the
+          release workflow runs on tags)
+
+  Preview any bootstrap first by replacing --no-secret-values with --plan.
 
 When every secret is pasted and verified by a dry workflow run: shred $OUT
   (rm -P on macOS, shred -u on Linux). Keep no other copy.
