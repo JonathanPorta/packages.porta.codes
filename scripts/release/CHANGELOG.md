@@ -44,23 +44,32 @@ repository server. Five steps, each holding only what it needs:
   objects, `pkgrepo_generation_id`), and a manifest naming another
   generation's id is refused.
 - **`pkgrepo-publish.sh`** + **`adapters/s3-object-adapter.sh`**: publishes
-  from the VERIFIER's object list, never the manifest. Stats every immutable
-  object BEFORE writing anything (an existing path with different bytes is
-  refused); uploads what is missing, create-only (identical objects are
-  skipped, so it resumes); then CLAIMS the activation — a compare-and-swap of
-  the live pointer to `{generation, state: activating, claim_id}` — before
-  writing a single served entrypoint, so of two racing publishers the loser
-  refuses having changed nothing anyone is served. Each entrypoint write is
-  conditional on the version observed right after the claim (`If-Match`, or
-  create-only), APT `InRelease` last, so a publisher that was superseded while
-  delayed stops instead of overwriting its successor; it confirms `active` by a
-  second compare-and-swap. Re-running an interrupted activation (same
-  inventory and parent) takes the claim over with a new `claim_id`; any other
-  generation is refused while the claim stands. The adapter gains `etag` and
-  `put … if-match:ETAG`. Re-publishing the active
-  generation, or any generation of an inventory already live (a replay),
-  writes nothing. A plan built on a parent that is no longer live is refused.
-  Nothing is deleted.
+  from the VERIFIER's object list, never the manifest, and never overwrites
+  anything a client is served. Every object is created once (`If-None-Match:
+  *`): shared immutables (packages, by-hash indexes, checksum-named repodata)
+  at their advertised paths, and the generation's ENTRYPOINTS under
+  `_generations/<generation_id>/`. It stats every object before writing
+  anything (an existing path with different bytes is refused) and skips
+  identical ones, so an interrupted publication resumes. The one replaced
+  object is the activation pointer `_state/generation.json`
+  (`blessed/package-repository-pointer/v2`: generation, inventory, generation
+  record digest, a fresh never-reused `activation_revision`, and the
+  predecessor it replaced). The plan is bound to `--expected-activation`; the
+  pointer is read once and replaced by ONE conditional write on that read's
+  version. A lost comparison voids the attempt — it is never re-read and
+  retried. Rollback is a new activation of an older generation, so pointer
+  bytes never repeat and an earlier plan can never match again (no ABA).
+  Re-publishing the active generation, or any generation of an inventory
+  already live (a replay), writes nothing. Nothing is deleted. The new
+  revision is printed on stdout.
+- **`pkgrepo-router.js`**: the read-only Cloudflare Worker in front of the
+  store. Requests for stable entrypoint URLs read the pointer uncached and are
+  served from the active generation's prefix with `Cache-Control: no-cache`;
+  every other path passes through, so every advertised by-hash, package and
+  repodata URL of every generation stays addressable. No KV, Durable Object,
+  database or lease; GET/HEAD only. `lib/pkgrepo-lib.sh`
+  `pkgrepo_is_entrypoint` is the same rule, and the verifier refuses a
+  generation whose classes disagree with it.
 - **`pkgrepo-client-check.sh`**: a real apt or dnf, inside a fresh target,
   configured from the PUBLISHED configuration and keys — each key file checked
   to be exactly the expected key before it is trusted — installs, runs, upgrades and

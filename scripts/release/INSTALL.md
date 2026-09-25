@@ -61,6 +61,7 @@ They source `lib/pkgrepo-lib.sh`, so vendor the whole category.
 | `pkgrepo-sign.sh` | jq, gpg | the repository key only |
 | `pkgrepo-verify.sh` | jq, gpg, gpgv, gzip, find; `rpmkeys` (DNF) | public keys only |
 | `pkgrepo-publish.sh` | jq, od, `/dev/urandom`, and an adapter (`adapters/s3-object-adapter.sh`: aws CLI v2 with conditional writes, `PKGREPO_BUCKET`) | the store credential only |
+| `pkgrepo-router.js` | a Cloudflare Worker (modules), `env.ORIGIN` = the store's HTTP origin; runtime with `fetch(…, {cache: "no-store"})` | nothing |
 | `pkgrepo-client-check.sh` | runs as root inside a fresh target: curl, gpg, and apt-get or dnf | nothing |
 
 Pin the generator tools in an image or package lock: an unpinned

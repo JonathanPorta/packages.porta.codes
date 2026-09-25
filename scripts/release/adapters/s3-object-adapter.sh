@@ -2,16 +2,13 @@
 # s3-object-adapter.sh — object-store adapter for pkgrepo-publish.sh, backed by S3.
 #
 #   stat KEY                          → prints the object's recorded sha256; exit 3 if absent
-#   etag KEY                          → prints the object's current ETag; exit 3 if absent
-#   put KEY FILE TYPE CACHE SHA256 [create-only | if-match:ETAG]
+#   put KEY FILE TYPE CACHE SHA256 [create-only]
 #                                     → uploads with Content-Type, Cache-Control and
 #                                       x-amz-meta-sha256 (read back by `stat`). With
 #                                       create-only it sends If-None-Match: * and exits 4
 #                                       if the key already exists — the form a bucket
 #                                       policy can REQUIRE for immutable prefixes, as
-#                                       docsort.io's surface-publication guards do.
-#                                       With if-match:ETAG it sends If-Match and exits
-#                                       4 unless the object is still that version
+#                                       docsort.io's surface-publication guards do
 #   get-pointer KEY OUT               → writes the object to OUT, prints its ETag; exit 3 if absent
 #   put-pointer KEY FILE ETAG|none    → CONDITIONAL write: If-Match ETAG, or If-None-Match *
 #                                       when none; exit 4 when the precondition fails
@@ -38,20 +35,11 @@ case "$verb" in
     }
     printf '%s\n' "$h"
     ;;
-  etag)
-    out="$("$AWS" s3api head-object --bucket "$B" --key "$1" --output json 2>&1)" || {
-      case "$out" in *"Not Found"* | *"404"* | *NoSuchKey*) exit 3 ;; esac
-      printf 's3-adapter: head-object %s failed: %s\n' "$1" "$out" >&2
-      exit 2
-    }
-    printf '%s' "$out" | jq -r '.ETag // empty'
-    ;;
   put)
     cond=()
     case "${6:-}" in
       "") ;;
       create-only) cond=(--if-none-match '*') ;;
-      if-match:?*) cond=(--if-match "${6#if-match:}") ;;
       *)
         printf 's3-adapter: unknown put condition %s\n' "$6" >&2
         exit 2
@@ -83,7 +71,7 @@ case "$verb" in
     printf '%s' "$out" | jq -r .ETag
     ;;
   *)
-    printf 'usage: s3-object-adapter.sh stat|etag|put|get-pointer|put-pointer ...\n' >&2
+    printf 'usage: s3-object-adapter.sh stat|put|get-pointer|put-pointer ...\n' >&2
     exit 2
     ;;
 esac

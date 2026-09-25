@@ -119,3 +119,14 @@ pkgrepo_generation_id() {
       | sort_by(.path)' "$2"
   } | sha256sum | cut -d' ' -f1
 }
+
+# pkgrepo_is_entrypoint PATH — whether PATH is a generation ENTRYPOINT: served
+# at its stable URL through the activation pointer (pkgrepo-router.js), stored
+# under _generations/<generation_id>/. Everything else is a shared immutable
+# object served at its own path. pkgrepo-router.js implements the SAME rule
+# (ENTRYPOINT_PATTERNS); tests/test-pkgrepo-router.sh proves they agree, and the
+# verifier refuses a generation whose classes disagree with it.
+PKGREPO_ENTRYPOINT_ERE='(^|/)dists/[^/]+/(InRelease|Release|Release\.gpg)$|(^|/)dists/[^/]+/[^/]+/binary-[^/]+/Packages(\.gz)?$|(^|/)repodata/repomd\.xml(\.asc)?$|\.(sources|repo|asc)$'
+pkgrepo_is_entrypoint() {
+  printf '%s\n' "$1" | grep -Eq "$PKGREPO_ENTRYPOINT_ERE"
+}

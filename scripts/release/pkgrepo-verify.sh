@@ -72,7 +72,7 @@ done
 if [ -z "$gen" ] || [ -z "$inv" ]; then usage; fi
 [ -d "$gen" ] || die "--generation is not a directory"
 M="$gen/.generation.json"
-for t in "$JQ" gpg gpgv sha256sum gzip find; do command -v "$t" >/dev/null 2>&1 || die "required tool not found: $t"; done
+for t in "$JQ" gpg gpgv sha256sum gzip find cmp comm; do command -v "$t" >/dev/null 2>&1 || die "required tool not found: $t"; done
 # shellcheck source=scripts/release/lib/pkgrepo-lib.sh
 . "$HERE/lib/pkgrepo-lib.sh" || die "packaged library not found: $HERE/lib/pkgrepo-lib.sh"
 sha() { sha256sum "$1" | cut -d' ' -f1; }
@@ -97,7 +97,7 @@ odd="$(cd "$gen" && find . -mindepth 1 ! -type f ! -type d | sed 's#^\./##' | he
 repo_fpr="$("$JQ" -r .repository_key.fingerprint "$inv")"
 repo_kp="$("$JQ" -r .repository_key.public_key_path "$inv")"
 repo_ring="$work/repository.gpg"
-expect "$repo_kp" immutable
+expect "$repo_kp" entrypoint
 if ! present "$repo_kp"; then
   fail "repository key $repo_kp is missing"
 elif ! why="$(pkgrepo_exact_key "$gen/$repo_kp" "$repo_fpr")"; then
@@ -108,7 +108,7 @@ else
 fi
 [ -f "$repo_ring" ] || : >"$repo_ring" # an empty keyring verifies nothing
 while IFS=$'\t' read -r pf pp; do
-  expect "$pp" immutable
+  expect "$pp" entrypoint
   mkdir -p "$work/rpmdb-$pf"
   if ! present "$pp"; then
     fail "producer key $pp is missing"
@@ -139,8 +139,8 @@ while IFS= read -r repo; do
   archs="$("$JQ" -r '.architectures | sort | join(" ")' <<<"$repo")"
   d="${rpath}dists/$suite"
   src="$(pkgrepo_apt_sources_path "$inv" "$id")"
-  for x in Release InRelease Release.gpg; do expect "$d/$x" mutable; done
-  expect "$src" mutable
+  for x in Release InRelease Release.gpg; do expect "$d/$x" entrypoint; done
+  expect "$src" entrypoint
   if present "$src"; then
     pkgrepo_apt_sources "$inv" "$id" | cmp -s - "$gen/$src" || fail "$id: $src is not the configuration the inventory defines"
   else fail "$id: $src is missing"; fi
@@ -164,7 +164,7 @@ while IFS= read -r repo; do
   while read -r h s f; do
     case "$f" in */../* | ../* | /*) fail "$id: Release lists an index outside its tree: $f" && continue ;; esac
     bh="$(dirname "$d/$f")/by-hash/SHA256/$h"
-    expect "$d/$f" mutable
+    expect "$d/$f" entrypoint
     expect "$bh" immutable
     if ! present "$d/$f"; then
       fail "$id: $f is missing"
@@ -203,8 +203,8 @@ while IFS= read -r repo; do
   id="$("$JQ" -r .id <<<"$repo")"
   rpath="$("$JQ" -r .path <<<"$repo")"
   rd="${rpath}repodata"
-  expect "$rd/repomd.xml" mutable
-  expect "$rd/repomd.xml.asc" mutable
+  expect "$rd/repomd.xml" entrypoint
+  expect "$rd/repomd.xml.asc" entrypoint
   if ! present "$rd/repomd.xml" || ! present "$rd/repomd.xml.asc"; then
     fail "$id: repomd.xml or its signature is missing"
     continue
@@ -249,7 +249,7 @@ while IFS= read -r product; do
     fail "product $product has no single DNF configuration path"
     continue
   fi
-  expect "$cfg" mutable
+  expect "$cfg" entrypoint
   if ! body="$(pkgrepo_dnf_repo "$inv" "$product")"; then
     fail "$body"
   elif ! present "$cfg"; then
@@ -268,6 +268,12 @@ extra="$(comm -13 "$work/want.paths" "$work/have.paths")"
 missing="$(comm -23 "$work/want.paths" "$work/have.paths")"
 [ -z "$extra" ] || fail "files no authenticated source accounts for: $(printf '%s' "$extra" | head -5 | tr '\n' ' ')"
 [ -z "$missing" ] || fail "derived objects missing from the tree: $(printf '%s' "$missing" | head -5 | tr '\n' ' ')"
+
+# ── every class is the one the router serves it as ────────────────────────
+while IFS=$'\t' read -r p c; do
+  if pkgrepo_is_entrypoint "$p"; then want=entrypoint; else want=immutable; fi
+  [ "$c" = "$want" ] || fail "$p is a $c object, but the router would serve it as $want"
+done < <(sort -u "$E")
 
 [ "$fails" -eq 0 ] || refused "$fails check(s) failed"
 

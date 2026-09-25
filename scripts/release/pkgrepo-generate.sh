@@ -8,8 +8,11 @@
 # the repository and producer public keys are checked against the fingerprints
 # the inventory declares. Output is a complete site tree plus a generation
 # manifest (blessed/package-repository-generation/v1) classifying every object
-# as IMMUTABLE (packages, by-hash indexes, checksum-named repodata, keys) or
-# MUTABLE (APT Release, DNF repomd.xml, client configuration). Signing is a
+# as IMMUTABLE — shared, published once at its advertised path (packages,
+# by-hash indexes, checksum-named repodata) — or ENTRYPOINT — published under
+# the generation's own prefix and reached at its stable URL through the
+# activation pointer (APT Release and plain indexes, DNF repomd.xml, client
+# configuration, public keys; pkgrepo-publish.sh, pkgrepo-router.js). Signing is a
 # separate, isolated step (pkgrepo-sign.sh); this step holds no secret.
 #
 # DETERMINISM. Given the same inventory, package bytes, keys, --timestamp and
@@ -140,7 +143,7 @@ while IFS=$'\t' read -r kp kf; do
   why="$(pkgrepo_exact_key "$keys/$kp" "$kf")" || refuse "public key $kp $why"
   mkdir -p "$site/$(dirname "$kp")"
   cp "$keys/$kp" "$site/$kp"
-  record immutable "$kp" "application/pgp-keys"
+  record entrypoint "$kp" "application/pgp-keys"
 done < <("$JQ" -r '[.repository_key] + .producer_keys | .[] | [.public_key_path, .fingerprint] | @tsv' "$inv")
 
 # ── packages: every byte is the inventory's byte ───────────────────────────
@@ -194,9 +197,9 @@ while IFS= read -r repo; do
       cp "$site/$dists/$bdir/$idx" "$site/$dists/$bdir/by-hash/SHA256/$h"
       record immutable "$dists/$bdir/by-hash/SHA256/$h" "application/octet-stream"
       printf ' %s %16s %s\n' "$h" "$(size "$site/$dists/$bdir/$idx")" "$bdir/$idx" >>"$shaidx"
-      # The index itself under its plain name is a MUTABLE convenience copy;
+      # The index itself under its plain name is an ENTRYPOINT convenience copy;
       # by-hash clients never read it.
-      record mutable "$dists/$bdir/$idx" "$([ "$idx" = Packages.gz ] && echo application/gzip || echo text/plain)"
+      record entrypoint "$dists/$bdir/$idx" "$([ "$idx" = Packages.gz ] && echo application/gzip || echo text/plain)"
     done
   done
   {
@@ -205,11 +208,11 @@ while IFS= read -r repo; do
     printf 'Description: %s packages (%s)\nSHA256:\n' "$product" "$("$JQ" -r .channel <<<"$repo")"
     cat "$shaidx"
   } >"$site/$dists/Release"
-  record mutable "$dists/Release" "text/plain"
+  record entrypoint "$dists/Release" "text/plain"
   # Client configuration: deb822 with a scoped Signed-By. Never trusted=yes.
   cfg="$(pkgrepo_apt_sources_path "$inv" "$id")"
   pkgrepo_apt_sources "$inv" "$id" >"$site/$cfg"
-  record mutable "$cfg" "text/plain"
+  record entrypoint "$cfg" "text/plain"
 done < <("$JQ" -c '.repositories[] | select(.format == "apt")' "$inv")
 
 # ── DNF repositories ───────────────────────────────────────────────────────
@@ -233,7 +236,7 @@ while IFS= read -r repo; do
   for md in "$site/$rpath"repodata/*; do
     rel="${md#"$site/"}"
     case "$(basename "$md")" in
-      repomd.xml) record mutable "$rel" "application/xml" ;;
+      repomd.xml) record entrypoint "$rel" "application/xml" ;;
       *) record immutable "$rel" "$(case "$md" in *.gz) echo application/gzip ;; *) echo application/xml ;; esac)" ;;
     esac
   done
@@ -247,7 +250,7 @@ while IFS= read -r product; do
   body="$(pkgrepo_dnf_repo "$inv" "$product")" || refuse "$body"
   cfg="$(pkgrepo_dnf_repo_path "$inv" "$product")"
   printf '%s\n' "$body" >"$site/$cfg"
-  record mutable "$cfg" "text/plain"
+  record entrypoint "$cfg" "text/plain"
 done < <("$JQ" -r '[.repositories[] | select(.format == "dnf") | .product] | unique | .[]' "$inv")
 
 # Packages are recorded last so their manifest order is stable and grouped.

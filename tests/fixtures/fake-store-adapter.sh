@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Vendored verbatim from JonathanPorta/blessed-cicd tests/fixtures/pkgrepo/fake-store-adapter.sh
-# at 778ed09 (the release 0.5.0 candidate). Same verbs and exit codes as
-# scripts/release/adapters/s3-object-adapter.sh.
 # Directory-backed stand-in for adapters/s3-object-adapter.sh, same verbs and
 # exit codes. FAKE_STORE is the store root. Injection for the resume and race
 # controls:
@@ -64,22 +61,12 @@ case "$verb" in
       touch "$S/.raced-object"
     fi
     if [ "${6:-}" = create-only ] && [ -f "$S/o/$1" ]; then exit 4; fi
-    # if-match: the version is content-derived, as an S3 single-part ETag is.
-    case "${6:-}" in if-match:*)
-      [ -f "$S/o/$1" ] || exit 4
-      [ "$(sha256sum "$S/o/$1" | cut -d' ' -f1)" = "${6#if-match:}" ] || exit 4
-      ;;
-    esac
     mkdir -p "$(dirname "$S/o/$1")" "$(dirname "$S/m/$1")"
     cp "$2" "$S/o/$1"
     printf '%s\n' "$5" >"$S/m/$1.sha256"
     printf '%s\n' "$3" >"$S/m/$1.type"
     printf '%s\n' "$4" >"$S/m/$1.cache"
     log put "$@"
-    ;;
-  etag)
-    [ -f "$S/o/$1" ] || exit 3
-    sha256sum "$S/o/$1" | cut -d' ' -f1
     ;;
   get-pointer)
     [ -f "$S/o/$1" ] || exit 3

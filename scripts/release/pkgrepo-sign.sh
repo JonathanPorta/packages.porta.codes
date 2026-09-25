@@ -6,7 +6,7 @@
 # what the unsigned generation manifest already names, after proving those files
 # are still the bytes the manifest recorded. APT `Release` gains `InRelease`
 # (clearsigned) and `Release.gpg` (detached); DNF `repomd.xml` gains
-# `repomd.xml.asc` (detached, armored). All are MUTABLE entrypoints. It never
+# `repomd.xml.asc` (detached, armored). All are generation ENTRYPOINTS. It never
 # rebuilds, re-reads a package, or signs a package — producers sign RPMs before
 # their candidate is sealed (linux-packaging LP-9).
 #
@@ -132,7 +132,7 @@ done
 signed="$work/signed.jsonl"
 : >"$signed"
 add() { "$JQ" -cn --arg p "$1" --arg t "$2" --arg h "$(sha "$gen/$1")" --argjson s "$(size "$gen/$1")" \
-  '{path: $p, class: "mutable", content_type: $t, sha256: $h, size: $s}' >>"$signed"; }
+  '{path: $p, class: "entrypoint", content_type: $t, sha256: $h, size: $s}' >>"$signed"; }
 G() { gpg --batch --yes --quiet --local-user "$fpr" --digest-algo SHA512 "$@"; }
 
 while IFS= read -r rel; do

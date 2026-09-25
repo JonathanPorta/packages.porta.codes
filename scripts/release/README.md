@@ -387,10 +387,11 @@ pkgrepo-sign.sh --generation gen/ --key-fingerprint "$REPO_FPR" --private-key-en
 # 3. VERIFY (public keys only): derive every object from the inventory and the
 #    signed metadata; the unsigned manifest may only confirm
 pkgrepo-verify.sh --generation gen/ --inventory inventory.json --emit-objects verified.json
-# 4. PUBLISH (the store credential only): verify again, then create-only
-#    immutables, a fenced claim, conditional entrypoint writes, confirm, read back
+# 4. PUBLISH (the store credential only): verify again, create every object
+#    once, then activate with ONE conditional write of the pointer; prints the
+#    new activation revision
 pkgrepo-publish.sh --generation gen/ --inventory inventory.json \
-  --adapter adapters/s3-object-adapter.sh --expected-parent "$LIVE_GENERATION_ID"
+  --adapter adapters/s3-object-adapter.sh --expected-activation "$LIVE_ACTIVATION_REVISION"
 # 5. CLIENT CHECK (inside a fresh target, as root): a real apt or dnf
 pkgrepo-client-check.sh --format dnf --config-url https://…/rpm/<product>/<product>.repo \
   --key https://…/keys/repository.asc=$REPO_FPR --key https://…/keys/<producer>.asc=$PRODUCER_FPR \
@@ -406,14 +407,18 @@ inventory digest and every unsigned object (paths, classes, digests) by
 `lib/pkgrepo-lib.sh`; the generator and the verifier compute it the same way, so
 a manifest cannot name another generation.
 
-**Activation is claimed, fenced and confirmed.** The live pointer
-(`_state/generation.json`) holds `{generation_id, inventory_sha256,
-parent_generation_id, state, claim_id}`. A publisher claims by compare-and-swap
-before writing anything served; a re-run of an interrupted activation takes the
-claim over with a new `claim_id`; each entrypoint write is conditional on the
-version observed right after the claim, so a superseded publisher stops instead
-of overwriting its successor. While a claim stands, only that generation's
-publisher (a re-run) can finish it.
+**Nothing served is overwritten; activation is one conditional write.**
+Entrypoints are stored per generation under `_generations/<generation_id>/`
+and shared immutables at their own paths, all created once. The activation
+pointer (`_state/generation.json`, `blessed/package-repository-pointer/v2`)
+names the active generation with a fresh, never-reused `activation_revision`.
+`pkgrepo-router.js` — a read-only Cloudflare Worker, deployed by the surface
+repo with `ORIGIN` set to the bucket's website endpoint — resolves each request
+for a stable entrypoint URL against that pointer, uncached, and passes every
+other path through. So activation is atomic per request; an APT/DNF
+transaction is not (see PR-7 in the standard). A plan is bound to the
+activation it expects to replace; a lost compare-and-swap voids it, and
+rollback is a new activation.
 
 ## Determinism contract
 
