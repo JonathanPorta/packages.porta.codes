@@ -68,6 +68,6 @@ deploy: require-workspace ## Apply the reviewed plan.tmp (infrastructure only; p
 	@[ -f plan.tmp ] || { echo "refusing: no plan.tmp — run make plan and review plan.out first"; exit 1; }
 	terraform apply -input=false plan.tmp
 
-verify-edge: ## Read the live pointer and entrypoint headers from https://packages.porta.codes/
+verify-edge: ## Read the live pointer, and a routed entrypoint's headers, from https://packages.porta.codes/
 	curl -fsS -H 'Cache-Control: no-cache' https://packages.porta.codes/_state/generation.json | jq .
-	curl -fsSI https://packages.porta.codes/keys/repository.asc | grep -iE '^(HTTP|cache-control|content-type)'
+	curl -fsSI https://packages.porta.codes/keys/repository.asc | grep -iE '^(HTTP|cache-control|content-type|x-pkgrepo-)'
