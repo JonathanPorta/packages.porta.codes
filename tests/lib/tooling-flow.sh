@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # tooling-flow.sh WORK — the surface's whole flow, offline, with EPHEMERAL keys:
-# admit → fetch → generate → sign → verify → publish (fake store) → replay →
-# interrupted resume → stale refusal. Run by tests/e2e.sh inside the pinned
-# tools image (tools/Dockerfile) plus rpm-build/rpm-sign for the demo packages.
+# admit → fetch → generate → sign → verify → publish (directory store) →
+# replay → interrupted resume → stale and void activations. Run by tests/e2e.sh
+# inside the pinned tools image (tools/Dockerfile) plus rpm-build/rpm-sign for
+# the demo packages.
 #
-# Leaves for the client phase: WORK/served-g1 and WORK/served-g2 (the store's
-# public tree after each activation), WORK/served-bad (g1 with a stranger-signed
-# InRelease), WORK/fingerprints and a TLS certificate for packages.porta.codes.
+# Leaves for the client phase, which serves each through the REAL router:
+# WORK/served-g1 and WORK/served-g2 (snapshots of the whole store after each
+# activation), WORK/served-bad (g1's store with its generation's InRelease
+# re-signed by a stranger), WORK/fingerprints and a TLS certificate for
+# packages.porta.codes.
 #
 # Every negative control must be refused FOR ITS OWN REASON (the message is
 # matched); a refusal for another reason is a failure.
@@ -194,8 +197,8 @@ build_gen() { # inventory, out, timestamp, pool
     bash "$R/scripts/release/pkgrepo-verify.sh" --generation "$2" --inventory "$1" >/dev/null
 }
 fetch() { bash "$R/scripts/surface/fetch-pool.sh" --inventory "$1" --pool "$2" --retained-base "file://$3/" --local-releases "$WORK/releases"; }
-publish() { bash "$R/scripts/release/pkgrepo-publish.sh" --generation "$1" --inventory "$2" --adapter "$FA" --expected-parent "$3"; }
-parent() { bash "$R/scripts/surface/live-parent.sh" "file://$FAKE_STORE/o/_state/generation.json"; }
+publish() { bash "$R/scripts/release/pkgrepo-publish.sh" --generation "$1" --inventory "$2" --adapter "$FA" --expected-activation "$3"; }
+activation() { bash "$R/scripts/surface/live-activation.sh" "file://$FAKE_STORE/o/_state/generation.json"; }
 if out="$(fetch "$WORK/inv1.json" "$WORK/pool1" "$FAKE_STORE/o" 2>&1)" && printf '%s' "$out" | grep -q '0 retained .* 3 new'; then
   ok "the first pool comes entirely from the producer's release, every byte checked"
 else
@@ -203,15 +206,16 @@ else
   note "$out"
 fi
 TS=1790000000
-if build_gen "$WORK/inv1.json" "$WORK/g1" "$TS" "$WORK/pool1" 2>"$WORK/err" && P="$(parent)" && [ "$P" = none ] &&
-  out="$(publish "$WORK/g1" "$WORK/inv1.json" "$P" 2>&1)"; then
+if build_gen "$WORK/inv1.json" "$WORK/g1" "$TS" "$WORK/pool1" 2>"$WORK/err" && P="$(activation)" && [ "$P" = none ] &&
+  out="$(publish "$WORK/g1" "$WORK/inv1.json" "$P" 2>/dev/null)" && [ "$(activation)" = "$out" ]; then
   ok "generation 1 is generated with the pinned tools, signed, verified and activated"
 else
   bad "generation 1 failed"
   note "$(cat "$WORK/err") ${out:-}"
 fi
 G1="$(jq -r .generation_id "$WORK/g1/.generation.json")"
-cp -a "$FAKE_STORE/o" "$WORK/served-g1"
+R1="$(activation)"
+cp -a "$FAKE_STORE" "$WORK/served-g1"
 if out="$(fetch "$WORK/inv2.json" "$WORK/pool2" "$FAKE_STORE/o" 2>&1)" && printf '%s' "$out" | grep -q '3 retained .* 3 new'; then
   ok "the next pool takes retained packages from the published surface and only new ones from the producer"
 else
@@ -222,17 +226,19 @@ cp -a "$FAKE_STORE/o" "$WORK/store-tampered"
 f1="$(jq -r '.packages[0].file' "$WORK/inv1.json")"
 printf 'X' >>"$WORK/store-tampered/$f1"
 expect_refusal "a published package whose bytes are not the inventory's" "is not the inventory's bytes" fetch "$WORK/inv2.json" "$WORK/pool-t" "$WORK/store-tampered"
-if build_gen "$WORK/inv2.json" "$WORK/g2" $((TS + 100)) "$WORK/pool2" 2>"$WORK/err" && P="$(parent)" && [ "$P" = "$G1" ] &&
-  out="$(publish "$WORK/g2" "$WORK/inv2.json" "$P" 2>&1)"; then
-  ok "generation 2 activates on the live generation read at plan time"
+if build_gen "$WORK/inv2.json" "$WORK/g2" $((TS + 100)) "$WORK/pool2" 2>"$WORK/err" && P="$(activation)" && [ "$P" = "$R1" ] &&
+  out="$(publish "$WORK/g2" "$WORK/inv2.json" "$P" 2>&1)" &&
+  [ "$(jq -r .predecessor.activation_revision "$FAKE_STORE/o/_state/generation.json")" = "$R1" ]; then
+  ok "generation 2 activates on the live activation read at plan time, recording it as predecessor"
 else
   bad "generation 2 failed"
   note "$(cat "$WORK/err") ${out:-}"
 fi
 G2="$(jq -r .generation_id "$WORK/g2/.generation.json")"
-cp -a "$FAKE_STORE/o" "$WORK/served-g2"
+R2="$(activation)"
+cp -a "$FAKE_STORE" "$WORK/served-g2"
 n0="$(grep -c '^put ' "$FAKE_LOG")"
-out="$(publish "$WORK/g2" "$WORK/inv2.json" "$G1" 2>&1)"
+out="$(publish "$WORK/g2" "$WORK/inv2.json" "$R2" 2>&1)"
 if printf '%s' "$out" | grep -q 'already active' && [ "$(grep -c '^put ' "$FAKE_LOG")" = "$n0" ]; then
   ok "re-running the publication of the live generation writes nothing"
 else
@@ -240,38 +246,46 @@ else
   note "$out"
 fi
 build_gen "$WORK/inv2.json" "$WORK/g2r" $((TS + 200)) "$WORK/pool2" 2>/dev/null
-out="$(publish "$WORK/g2r" "$WORK/inv2.json" "$G2" 2>&1)"
+out="$(publish "$WORK/g2r" "$WORK/inv2.json" "$R2" 2>&1)"
 if printf '%s' "$out" | grep -q 'replay' && [ "$(grep -c '^put ' "$FAKE_LOG")" = "$n0" ]; then
   ok "a replay of the served inventory, regenerated later, republishes nothing"
 else
   bad "the replay was not a no-op"
   note "$out"
 fi
-expect_refusal "a publication planned before the live generation moved (stale plan)" "stale plan" publish "$WORK/g1" "$WORK/inv1.json" none
+expect_refusal "a publication planned before the live activation moved (stale plan)" "stale plan" publish "$WORK/g1" "$WORK/inv1.json" "$R1"
+printf '{"schema":"blessed/package-repository-pointer/v2","generation_id":"other","inventory_sha256":"other","activation_revision":"%s"}' "$(printf 'f%.0s' $(seq 1 32))" >"$WORK/other.json"
+expect_refusal "an activation that loses its compare-and-swap is void" "this attempt is void" \
+  env FAKE_RACE_POINTER="$WORK/other.json" bash "$R/scripts/release/pkgrepo-publish.sh" --generation "$WORK/g1" --inventory "$WORK/inv1.json" --adapter "$FA" --expected-activation "$R2"
+if [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = other ] && [ "$(grep -c '^put-pointer' "$FAKE_LOG")" -ge 1 ] &&
+  [ "$(activation)" = "$(printf 'f%.0s' $(seq 1 32))" ]; then
+  ok "…the other activation stands, and the void attempt was not retried; the next run re-plans from it"
+else bad "…the pointer was overwritten after a lost compare-and-swap"; fi
 
 echo "── interruption and resume ──"
 export FAKE_STORE="$WORK/store-i" FAKE_LOG="$WORK/store-i.log"
 mkdir -p "$FAKE_STORE/o"
 publish "$WORK/g1" "$WORK/inv1.json" none >/dev/null 2>&1
+RI="$(activation)"
 rc=0
-FAKE_FAIL_PUT_MATCH='*.sources' publish "$WORK/g2" "$WORK/inv2.json" "$G1" >/dev/null 2>&1 || rc=$?
-if [ "$rc" -eq 2 ] && [ "$(jq -r '"\(.generation_id) \(.state)"' "$FAKE_STORE/o/_state/generation.json")" = "$G2 activating" ] &&
-  [ "$(parent)" = "$G1" ]; then
-  ok "an interrupted activation leaves its claim, and a re-plan still names the claim's parent"
+FAKE_FAIL_PUT_MATCH='*.sources' publish "$WORK/g2" "$WORK/inv2.json" "$RI" >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 2 ] && [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = "$G1" ] && [ "$(activation)" = "$RI" ]; then
+  ok "a publication interrupted mid-upload activates nothing; the live activation is unchanged"
 else
-  bad "the interrupted activation left the wrong state (rc=$rc)"
+  bad "the interrupted publication left the wrong state (rc=$rc)"
 fi
-if out="$(publish "$WORK/g2" "$WORK/inv2.json" "$(parent)" 2>&1)" && printf '%s' "$out" | grep -q 'taking over' &&
-  diff -r -x _state "$WORK/served-g2" "$FAKE_STORE/o" >/dev/null; then
-  ok "…re-running the workflow takes the claim over and serves exactly generation 2"
+if out="$(publish "$WORK/g2" "$WORK/inv2.json" "$(activation)" 2>&1)" && [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = "$G2" ] &&
+  [ -z "$(grep '^put ' "$FAKE_LOG" | awk '{print $2}' | sort | uniq -d)" ] &&
+  diff -r -x _state "$WORK/served-g2/o" "$FAKE_STORE/o" >/dev/null; then
+  ok "…re-running the workflow resumes (nothing rewritten) and stores exactly generation 2"
 else
-  bad "the interrupted activation did not resume to generation 2"
+  bad "the interrupted publication did not resume to generation 2"
   note "$out"
 fi
 
-# For the client phase: g1 with InRelease re-signed by a stranger.
+# For the client phase: g1's store with its generation's InRelease re-signed by a stranger.
 cp -a "$WORK/served-g1" "$WORK/served-bad"
-gpg --batch --yes --quiet --local-user "$XK" --clearsign --output "$WORK/served-bad/apt/demo/dists/stable/InRelease" "$WORK/served-g1/apt/demo/dists/stable/Release"
+gpg --batch --yes --quiet --local-user "$XK" --clearsign --output "$WORK/served-bad/o/_generations/$G1/apt/demo/dists/stable/InRelease" "$WORK/g1/apt/demo/dists/stable/Release"
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=packages.porta.codes -addext subjectAltName=DNS:packages.porta.codes \
   -keyout "$WORK/tls-key.pem" -out "$WORK/tls-cert.pem" >/dev/null 2>&1
 

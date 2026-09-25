@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
-# live-parent.sh URL — print the generation a new publication must be planned
-# on: the live generation (`none` before the first publication). Read at PLAN
-# time and passed to pkgrepo-publish.sh --expected-parent, so a run whose plan
-# is overtaken by another activation is refused as stale instead of
-# overwriting it (PR-10).
-#
-# While a claim stands (state `activating`), prints that claim's parent: only
-# the claimant's own generation can then proceed (a re-run takes it over);
-# every other generation is refused by the publisher.
+# live-activation.sh URL — print the activation a new publication must be
+# planned against: the live pointer's `activation_revision` (`none` before the
+# first publication). Read at PLAN time and passed to pkgrepo-publish.sh
+# --expected-activation. The publisher then activates with ONE conditional
+# write; if another activation lands first, that attempt is void and the job
+# fails — the next run re-plans from here (PR-10). Nothing re-reads and retries.
 #
 # URL is the pointer, e.g. https://packages.porta.codes/_state/generation.json
-# (or file:// in tests). Exit 0 printed · 2 unreadable.
+# (served by the router as a pass-through), or file:// in tests.
+# Exit 0 printed · 2 unreadable or not a v2 pointer.
 set -uo pipefail
-url="${1:?usage: live-parent.sh POINTER_URL}"
+url="${1:?usage: live-activation.sh POINTER_URL}"
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 code="$(curl -sS -H 'Cache-Control: no-cache' -o "$tmp" -w '%{http_code}' "$url" 2>/dev/null || true)"
@@ -23,7 +21,7 @@ case "$code" in
     ;;
   200 | 000) ;;
   *)
-    echo "live-parent: HTTP $code reading $url" >&2
+    echo "live-activation: HTTP $code reading $url" >&2
     exit 2
     ;;
 esac
@@ -32,7 +30,7 @@ if [ ! -s "$tmp" ]; then
   echo none
   exit 0
 fi
-jq -er 'if (.state // "active") == "activating" then .parent_generation_id else .generation_id end' "$tmp" 2>/dev/null || {
-  echo "live-parent: the pointer at $url is not a generation pointer" >&2
+jq -er 'select(.schema == "blessed/package-repository-pointer/v2") | .activation_revision | select(test("^[0-9a-f]{32}$"))' "$tmp" 2>/dev/null || {
+  echo "live-activation: the pointer at $url is not a blessed/package-repository-pointer/v2" >&2
   exit 2
 }

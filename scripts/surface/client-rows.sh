@@ -12,11 +12,16 @@
 # PUBLISHED configuration and keys, each key checked against the inventory's
 # fingerprint (pkgrepo-client-check.sh); every signature check stays on.
 #
-# Staged (before publication): --serve DIR --tls-dir DIR serves DIR over HTTPS
-# as the surface's own hostname on a private network, with a throwaway
-# certificate only the client containers trust — so the configuration users
-# will fetch is tested byte for byte. Read-back (after publication): omit
-# --serve; the clients use the real endpoint.
+# Staged (before publication): --serve-store DIR --tls-dir DIR serves a
+# PUBLISHED store directory (the layout pkgrepo-publish.sh writes: shared
+# immutables, _generations/<id>/, the activation pointer) through the real
+# router, scripts/release/pkgrepo-router.js, run in the blessed Node harness,
+# behind an HTTPS front answering as the surface's own hostname on a private
+# network, with a throwaway certificate only the client containers trust. So
+# clients fetch exactly what they will fetch from the live surface — the
+# configuration byte for byte, every entrypoint resolved through the pointer.
+# Read-back (after publication): omit --serve-store; the clients use the real
+# endpoint.
 #
 # Packages whose producer sets `systemd: true` run in a client with a booted
 # systemd (privileged, cgroupns=host), as their scriptlets require.
@@ -31,7 +36,7 @@ die() {
   exit 2
 }
 usage() {
-  printf 'Usage: client-rows.sh --inventory INV --policy POLICY [--serve DIR --tls-dir DIR] [--only-product NAME]\n' >&2
+  printf 'Usage: client-rows.sh --inventory INV --policy POLICY [--serve-store DIR --tls-dir DIR] [--only-product NAME]\n' >&2
   exit 2
 }
 inv="" policy="" serve="" tls="" only=""
@@ -39,7 +44,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --inventory) inv="${2:-}" && shift 2 ;;
     --policy) policy="${2:-}" && shift 2 ;;
-    --serve) serve="${2:-}" && shift 2 ;;
+    --serve-store) serve="${2:-}" && shift 2 ;;
     --tls-dir) tls="${2:-}" && shift 2 ;;
     --only-product) only="${2:-}" && shift 2 ;;
     -h | --help) usage ;;
@@ -47,7 +52,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ -z "$inv" ] || [ -z "$policy" ]; then usage; fi
-if [ -n "$serve" ] && [ -z "$tls" ]; then die "--serve needs --tls-dir (tls-cert.pem, tls-key.pem)"; fi
+if [ -n "$serve" ] && [ -z "$tls" ]; then die "--serve-store needs --tls-dir (tls-cert.pem, tls-key.pem)"; fi
+if [ -n "$serve" ] && [ ! -f "$serve/o/_state/generation.json" ]; then die "--serve-store $serve has no activation pointer (o/_state/generation.json)"; fi
 command -v docker >/dev/null 2>&1 || die "docker is required"
 base="$("$JQ" -r .public_base_url "$inv")"
 host="${base#https://}"
@@ -67,10 +73,15 @@ trap cleanup EXIT
 docker network create "$NET" >/dev/null || die "cannot create a docker network"
 
 if [ -n "$serve" ]; then
+  router="$(docker run -d --network "$NET" --network-alias router -v "$(cd "$serve" && pwd)":/store:ro -v "$ROOT":/w:ro \
+    -e ROUTER_BIND=0.0.0.0 -e ROUTER_PORT=8080 -e ROUTER=/w/scripts/release/pkgrepo-router.js \
+    node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 \
+    node /w/tests/fixtures/router-harness.mjs /store /tmp/port)" || die "cannot start the router"
+  IDS+=("$router")
   conf="$(mktemp)"
-  printf 'server {\n  listen 443 ssl;\n  server_name %s;\n  ssl_certificate /tls/tls-cert.pem;\n  ssl_certificate_key /tls/tls-key.pem;\n  root /srv;\n  autoindex off;\n}\n' "$host" >"$conf"
+  printf 'server {\n  listen 443 ssl;\n  server_name %s;\n  ssl_certificate /tls/tls-cert.pem;\n  ssl_certificate_key /tls/tls-key.pem;\n  location / {\n    proxy_pass http://router:8080;\n    proxy_http_version 1.1;\n  }\n}\n' "$host" >"$conf"
   chmod 644 "$conf"
-  web="$(docker run -d --network "$NET" --network-alias "$host" -v "$(cd "$serve" && pwd)":/srv:ro -v "$(cd "$tls" && pwd)":/tls:ro \
+  web="$(docker run -d --network "$NET" --network-alias "$host" -v "$(cd "$tls" && pwd)":/tls:ro \
     -v "$conf":/etc/nginx/conf.d/default.conf:ro \
     nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10)" || die "cannot start the staging server"
   IDS+=("$web")
@@ -83,6 +94,15 @@ if [ -n "$serve" ]; then
     sleep 1
   done
   [ "$up" = 1 ] || die "the staging server did not come up"
+  up=0
+  for _ in $(seq 1 20); do
+    if docker exec "$router" test -s /tmp/port 2>/dev/null; then
+      up=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$up" = 1 ] || die "the router did not come up: $(docker logs "$router" 2>&1 | tail -3)"
 fi
 
 # Client images: the distro release, plus exactly what bootstrapping trust
