@@ -22,8 +22,10 @@ OWN_SCRIPTS := $(wildcard scripts/surface/*.sh scripts/provision/*.sh tests/*.sh
 TOOLS_IMAGE ?= ppc-tools
 # The default BWS domain's project is `packages.porta.codes` (machine account
 # packages.porta.codes-ci): Cloudflare only. Other domains pass their own
-# APP_NAME and ARGS (PROVISIONING.md).
-APP_NAME ?= $(notdir $(CURDIR))
+# APP_NAME and ARGS (PROVISIONING.md). Pinned, not $(notdir $(CURDIR)): the
+# BWS identity is the repository's FQDN (dot notation, blessed-cicd#313) and
+# must not change with the name of a checkout directory.
+APP_NAME ?= packages.porta.codes
 
 .PHONY: help deps install dev format check test build docs clean plan deploy verify-edge \
 	sync-scripts verify-scripts bws-bootstrap bws-load \
@@ -66,6 +68,7 @@ check: verify-scripts validate ## Static checks: scripts, workflows, Terraform, 
 	bash scripts/provision/aws-oidc-bootstrap.sh --self-test
 	bash tests/aws-oidc-bootstrap-env.sh
 	bash tests/bws-loader-bootstrap.sh
+	bash tests/bws-app-name.sh
 	@if [ -d .terraform ]; then terraform validate; else echo "terraform validate: skipped (run terraform init with backend access first)"; fi
 
 # Internal (called by check): release-surfaces.yaml and, when present, the inventory.
