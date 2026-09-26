@@ -306,9 +306,11 @@ env_ok() { # $1 environment → 0 iff exists, exactly branch main, no AWS_* secr
     return 1
   fi
   # Every member must be well-formed; a jq failure is UNOBSERVABLE, never a result.
+  # .type is validated as given — the API always returns it — never defaulted:
+  # jq's `//` would turn false/null into "branch" and certify malformed input.
   if ! names="$(jq -er 'if all(.[]; type == "object" and (.name | type) == "string" and (.name | length) > 0
-                              and ((.type // "branch") | IN("branch", "tag")))
-                        then [.[] | "\(.type // "branch"):\(.name)"] | sort | join(",") else error("malformed") end' <<<"$names" 2>/dev/null)"; then
+                              and (.type | type) == "string" and (.type == "branch" or .type == "tag"))
+                        then [.[] | "\(.type):\(.name)"] | sort | join(",") else error("malformed") end' <<<"$names" 2>/dev/null)"; then
     fail "Environment $e deployment branch policies are malformed — refusing to trust it"
     return 1
   fi

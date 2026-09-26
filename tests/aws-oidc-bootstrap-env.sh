@@ -81,6 +81,14 @@ case "$s:$tail" in
   secretsnumname:/secrets) printf '%s' '[{"total_count":1,"secrets":[{"name":7}]}]' | body ;;
   secretsstringitem:/secrets) printf '%s' '[{"total_count":1,"secrets":["AWS_SECRET_ACCESS_KEY"]}]' | body ;;
   secretsordinary:/secrets) printf '%s' '[{"total_count":1,"secrets":[{"name":"BWS_ACCESS_TOKEN"}]}]' | body ;;
+  branchtypefalse:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":false}]}]' | body ;;
+  branchtypenull:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":null}]}]' | body ;;
+  branchtypeabsent:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main"}]}]' | body ;;
+  branchtypenum:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":0}]}]' | body ;;
+  branchtypearray:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":["branch"]}]}]' | body ;;
+  branchtypeobject:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":{}}]}]' | body ;;
+  branchtypeunknown:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":"environment"}]}]' | body ;;
+  branchtypetag:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":"main","type":"tag"}]}]' | body ;;
   branchesnullname:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":null,"type":"branch"}]}]' | body ;;
   branches403:/deployment-branch-policies) echo "gh: Forbidden (HTTP 403)" >&2; exit 1 ;;
   brancheslaterpage:/deployment-branch-policies) printf '%s' '[{"total_count":2,"branch_policies":[{"name":"main","type":"branch"}]},{"total_count":2,"branch_policies":[{"name":"release/*","type":"branch"}]}]' | body ;;
@@ -129,6 +137,14 @@ refuse secretsnullname "secret inventory is malformed" "a secret entry whose nam
 refuse secretsnumname "secret inventory is malformed" "a secret entry whose name is not a string"
 refuse secretsstringitem "secret inventory is malformed" "a secret entry that is not an object"
 refuse branchesnullname "branch policies are malformed" "a branch policy whose name is null"
+refuse branchtypefalse "branch policies are malformed" "a branch policy whose type is boolean false"
+refuse branchtypenull "branch policies are malformed" "a branch policy whose type is null"
+refuse branchtypeabsent "branch policies are malformed" "a branch policy whose type is absent"
+refuse branchtypenum "branch policies are malformed" "a branch policy whose type is a number"
+refuse branchtypearray "branch policies are malformed" "a branch policy whose type is an array"
+refuse branchtypeobject "branch policies are malformed" "a branch policy whose type is an object"
+refuse branchtypeunknown "branch policies are malformed" "a branch policy whose type is an unknown string"
+refuse branchtypetag "not exactly branch main" "a policy for TAG main (a valid type, the wrong ref kind)"
 refuse branches403 "branch policies are UNOBSERVABLE" "branch policies that fail with 403"
 refuse branchesmissing "branch policies are UNOBSERVABLE" "branch policies without their collection"
 refuse brancheslaterpage "not exactly branch main" "an extra branch on a LATER page"
