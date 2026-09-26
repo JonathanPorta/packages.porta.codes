@@ -107,26 +107,26 @@ if [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$before_sign" ] && [ "$(idline PAC
 if grep -Eq '^ *00000000-0000-0000-0000-[0-9a-fA-F]{12} > CLOUDFLARE_(API_TOKEN|ACCOUNT_ID)$' "$R/$LOADER"; then no "the terraform-plan placeholder guard would still refuse the default domain"; else ok "the terraform-plan placeholder guard now passes for the default domain"; fi
 
 echo "── the per-domain checkpoint ──"
-out="$(boot packages-porta-codes-repo-signing "PACKAGES_REPO_SIGNING_KEY" --secrets-list .bws/repository-signing.list \
+out="$(boot packages.porta.codes-repo-signing "PACKAGES_REPO_SIGNING_KEY" --secrets-list .bws/repository-signing.list \
   --project-id-file .bws/repository-signing.env --gh-environments repository-signing)"
 if [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$before_sign" ] && printf '%s' "$out" | grep -q 'uncommitted changes'; then ok "without the checkpoint, the next domain refuses to edit the uncommitted loader"; else no "the next domain edited an uncommitted loader"; fi
 git -C "$R" checkout -q -- .bws/repository-signing.env 2>/dev/null
 commit "row 0"
-out="$(boot packages-porta-codes-repo-signing "PACKAGES_REPO_SIGNING_KEY" --secrets-list .bws/repository-signing.list \
+out="$(boot packages.porta.codes-repo-signing "PACKAGES_REPO_SIGNING_KEY" --secrets-list .bws/repository-signing.list \
   --project-id-file .bws/repository-signing.env --gh-environments repository-signing)"
-if [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$(expected_id packages-porta-codes-repo-signing PACKAGES_REPO_SIGNING_KEY)" ]; then ok "after the checkpoint, row 1 fills PACKAGES_REPO_SIGNING_KEY"; else
+if [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$(expected_id packages.porta.codes-repo-signing PACKAGES_REPO_SIGNING_KEY)" ]; then ok "after the checkpoint, row 1 fills PACKAGES_REPO_SIGNING_KEY"; else
   no "row 1 did not fill"
   printf '%s\n' "$out" | tail -8 | sed 's/^/      /'
 fi
 if [ "$(idline CLOUDFLARE_API_TOKEN)" = "$t" ] && [ "$(idline CLOUDFLARE_ACCOUNT_ID)" = "$SHARED_ACCOUNT_ID" ] && [ "$(idline PACKAGES_CANDIDATE_READ_TOKEN)" = "$before_ingest" ]; then ok "…and leaves the default and candidate-ingest mappings intact"; else no "…row 1 changed another mapping"; fi
 commit "row 1"
-out="$(boot packages-porta-codes-candidate-ingest "PACKAGES_CANDIDATE_READ_TOKEN" --secrets-list .bws/candidate-ingest.list \
+out="$(boot packages.porta.codes-candidate-ingest "PACKAGES_CANDIDATE_READ_TOKEN" --secrets-list .bws/candidate-ingest.list \
   --project-id-file .bws/candidate-ingest.env --gh-environments candidate-ingest)"
-if [ "$(idline PACKAGES_CANDIDATE_READ_TOKEN)" = "$(expected_id packages-porta-codes-candidate-ingest PACKAGES_CANDIDATE_READ_TOKEN)" ]; then ok "row 2 fills PACKAGES_CANDIDATE_READ_TOKEN"; else
+if [ "$(idline PACKAGES_CANDIDATE_READ_TOKEN)" = "$(expected_id packages.porta.codes-candidate-ingest PACKAGES_CANDIDATE_READ_TOKEN)" ]; then ok "row 2 fills PACKAGES_CANDIDATE_READ_TOKEN"; else
   no "row 2 did not fill"
   printf '%s\n' "$out" | tail -8 | sed 's/^/      /'
 fi
-if [ "$(idline CLOUDFLARE_API_TOKEN)" = "$t" ] && [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$(expected_id packages-porta-codes-repo-signing PACKAGES_REPO_SIGNING_KEY)" ]; then ok "…with every earlier mapping intact"; else no "…row 2 changed an earlier mapping"; fi
+if [ "$(idline CLOUDFLARE_API_TOKEN)" = "$t" ] && [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$(expected_id packages.porta.codes-repo-signing PACKAGES_REPO_SIGNING_KEY)" ]; then ok "…with every earlier mapping intact"; else no "…row 2 changed an earlier mapping"; fi
 if grep -q '00000000-0000-0000-0000-000000000000' "$R/$LOADER"; then no "a placeholder remains after all three rows"; else ok "after all three rows the loader holds no placeholder"; fi
 if grep -q 'fake-admin' "$GH_LOG"; then no "a token value reached a mutation argument"; else ok "no token value appears in any mutation argument"; fi
 

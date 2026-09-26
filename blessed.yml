@@ -166,11 +166,11 @@ secret_authorities:
       branches:
         - main
       tags: []
-    bwsm_project: packages-porta-codes-candidate-ingest
+    bwsm_project: packages.porta.codes-candidate-ingest
     # CLOSED SET — exactly one project.
     bwsm_allowed_projects:
-      - packages-porta-codes-candidate-ingest
-    machine_account: packages-porta-codes-candidate-ingest-ci
+      - packages.porta.codes-candidate-ingest
+    machine_account: packages.porta.codes-candidate-ingest-ci
     # Fine-grained PAT: Contents read-only on JonathanPorta/kioskd, corpus,
     # keysprout; nothing else (APPROVAL.md §4).
     injects:
@@ -187,10 +187,10 @@ secret_authorities:
       branches:
         - main
       tags: []
-    bwsm_project: packages-porta-codes-repo-signing
+    bwsm_project: packages.porta.codes-repo-signing
     bwsm_allowed_projects:
-      - packages-porta-codes-repo-signing
-    machine_account: packages-porta-codes-repo-signing-ci
+      - packages.porta.codes-repo-signing
+    machine_account: packages.porta.codes-repo-signing-ci
     # The ARMORED OpenPGP repository key (RSA 4096). The sign job receives only
     # this; it has no contents: write, no candidate token and no AWS identity.
     injects:

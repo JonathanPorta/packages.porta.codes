@@ -71,8 +71,8 @@ runs:
           00000000-0000-0000-0000-000000000000 > CLOUDFLARE_API_TOKEN
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
 
-    # ── profile: candidate-ingest ── BWS project packages-porta-codes-candidate-ingest,
-    # machine account packages-porta-codes-candidate-ingest-ci, Environment
+    # ── profile: candidate-ingest ── BWS project packages.porta.codes-candidate-ingest,
+    # machine account packages.porta.codes-candidate-ingest-ci, Environment
     # candidate-ingest (branch main).
     - name: '🔐 Load the candidate-ingest secret'
       if: ${{ inputs.profile == 'candidate-ingest' }}
@@ -83,8 +83,8 @@ runs:
           00000000-0000-0000-0000-000000000000 > PACKAGES_CANDIDATE_READ_TOKEN
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
 
-    # ── profile: repository-signing ── BWS project packages-porta-codes-repo-signing,
-    # machine account packages-porta-codes-repo-signing-ci, Environment
+    # ── profile: repository-signing ── BWS project packages.porta.codes-repo-signing,
+    # machine account packages.porta.codes-repo-signing-ci, Environment
     # repository-signing (branch main).
     - name: '🔐 Load the repository-signing secret'
       if: ${{ inputs.profile == 'repository-signing' }}
