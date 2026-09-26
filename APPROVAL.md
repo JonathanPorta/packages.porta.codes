@@ -67,7 +67,7 @@ Terraform in this repository (`main.tf`, default workspace, state `deployments-s
 | S3 bucket `packages.porta.codes` (website) | `JonathanPorta/s3-static-site/aws` 1.5.0, as the portfolio's other static sites; public read |
 | Bucket policy guards (publisher principal only) | every `PutObject` except `_state/generation.json` must carry `If-None-Match` (condition key `s3:if-none-match`); the pointer must carry `If-Match` or `If-None-Match` (`s3:if-match` / `s3:if-none-match`); `DeleteObject`/`DeleteObjectVersion` denied. AWS documents both keys for enforcing conditional writes; a side effect is that `CopyObject` into the bucket is refused, which nothing uses. |
 | Cloudflare DNS | `packages.porta.codes` CNAME, **proxied**. Its target (the bucket's website endpoint, the module's output) is never reached: the Worker route `packages.porta.codes/*` answers every request, and fails CLOSED (Cloudflare error 1027) if the Free allowance is exhausted — nothing is served around the router |
-| Cloudflare Worker `packages-porta-codes-router` | the vendored blessed `pkgrepo-router.js` (release-v0.5.0, module), route `packages.porta.codes/*`, one plain-text binding `ORIGIN=https://s3.<region>.amazonaws.com/packages.porta.codes` — the bucket's **S3 REST endpoint over HTTPS, path-style** (the bucket name has dots, so the virtual-hosted name does not match S3's wildcard certificate; AWS documents path-style as supported, its deprecation delayed indefinitely). The HTTP-only website endpoint is never fetched. Compatibility date `2026-09-01`, flag `cache_option_enabled`. **No KV, Durable Object, database, lease or secret.** Read-only: GET/HEAD only. Route **fails closed** (`request_limit_fail_open = false`, the API default — the provider cannot set it, so `make verify-edge` asserts it from the live API) |
+| Cloudflare Worker `packages-porta-codes-router` | the vendored blessed `pkgrepo-router.js` (release-v0.5.1, module), route `packages.porta.codes/*`, one plain-text binding `ORIGIN=https://s3.<region>.amazonaws.com/packages.porta.codes` — the bucket's **S3 REST endpoint over HTTPS, path-style** (the bucket name has dots, so the virtual-hosted name does not match S3's wildcard certificate; AWS documents path-style as supported, its deprecation delayed indefinitely). The HTTP-only website endpoint is never fetched. Compatibility date `2026-09-01`, flag `cache_option_enabled`. **No KV, Durable Object, database, lease or secret.** Read-only: GET/HEAD only. Route **fails closed** (`request_limit_fail_open = false`, the API default — the provider cannot set it, so `make verify-edge` asserts it from the live API) |
 | Provider change | Cloudflare provider `~> 5.0` in this repo (the portfolio's proofglass already uses 5.x); `better-uptime` `~> 0.3.15` as the static-site module requires |
 
 Cloudflare credential: a NEW Cloudflare API token for this stack, held in the
@@ -250,7 +250,7 @@ Plan, with no new credential:
 ## 7. Links
 
 - Tooling: blessed-cicd #308 (merged `a250255`), released as
-  [release-v0.5.0](https://github.com/JonathanPorta/blessed-cicd/releases/tag/release-v0.5.0);
+  [release-v0.5.1](https://github.com/JonathanPorta/blessed-cicd/releases/tag/release-v0.5.1) (#308 + deterministic signatures #312);
   signing-v0.3.0 (#306).
 - Standard: `releases.package-repositories@1` (PR-7/8/9/10/13 as amended in #308),
   `releases.linux-packaging@1`, `releases.surfaces@1`.

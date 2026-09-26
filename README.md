@@ -168,7 +168,7 @@ make sync-scripts  # reinstall blessed scripts from the pins in scripts/.blessed
 `scripts/{bws,signing,release}` are vendored blessed-cicd categories — never
 edit them here; all three come from their released tarballs, MANIFEST verified.
 `tests/fixtures/{router-harness.mjs,fake-store-adapter.sh}` are copied from
-blessed-cicd at the release-v0.5.0 merge (`a250255`). `pkgrepo-publish.sh`'s S3 adapter needs an AWS CLI v2
+blessed-cicd at the release-v0.5.0 merge (`a250255`); unchanged in release-v0.5.1. `pkgrepo-publish.sh`'s S3 adapter needs an AWS CLI v2
 with conditional writes (`--if-match`, `--if-none-match`), as on current
 GitHub-hosted runners.
 

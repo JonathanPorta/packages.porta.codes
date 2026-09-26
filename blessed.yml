@@ -229,7 +229,7 @@ tracked_dependencies:
   blessed_scripts:
     bws: 1.9.1
     signing: 0.3.0
-    release: 0.5.0
+    release: 0.5.1
 
 waivers: []
 

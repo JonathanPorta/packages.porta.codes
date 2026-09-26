@@ -12,6 +12,6 @@ SIGNING_VERSION=0.3.0
 SIGNING_TAG=signing-v0.3.0
 
 # Candidate validation and the package-repository tooling (pkgrepo-*.sh).
-# Released: release-v0.5.0 (blessed-cicd #308, merge a250255).
-RELEASE_VERSION=0.5.0
-RELEASE_TAG=release-v0.5.0
+# Released: release-v0.5.1 (blessed-cicd #308 a250255 + #312 48b1107).
+RELEASE_VERSION=0.5.1
+RELEASE_TAG=release-v0.5.1

@@ -1,5 +1,18 @@
 # release changelog
 
+## 0.5.1
+
+### Fixed — an interrupted publication could not resume by regenerating
+
+`pkgrepo-sign.sh` stamped each OpenPGP signature with the wall-clock time, so
+regenerating and re-signing a generation (the documented "re-run the
+workflow" recovery) produced the same generation id with different
+`InRelease`, `Release.gpg` and `repomd.xml.asc` bytes, and create-only storage
+refused the resume. Signature creation time is now fixed to the generation's
+timestamp (or the key's creation time, if later), so re-signing is
+byte-identical; each signature is made twice and compared, refusing a key whose
+signatures are not deterministic. Found in review of packages.porta.codes#1.
+
 ## 0.5.0
 
 ### Added — package-repository-surface tooling (`releases.package-repositories@1`)

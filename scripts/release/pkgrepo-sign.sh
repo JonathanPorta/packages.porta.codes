@@ -86,7 +86,7 @@ case "$fpr" in *[!0-9A-F]* | "") die "--key-fingerprint must be 40 uppercase hex
 [ "${#fpr}" -eq 40 ] || die "--key-fingerprint must be 40 uppercase hex"
 M="$gen/.generation.json"
 [ -f "$M" ] || die "no generation manifest at $M"
-for t in "$JQ" gpg sha256sum; do command -v "$t" >/dev/null 2>&1 || die "required tool not found: $t"; done
+for t in "$JQ" gpg sha256sum cmp; do command -v "$t" >/dev/null 2>&1 || die "required tool not found: $t"; done
 # shellcheck source=scripts/release/lib/pkgrepo-lib.sh
 . "$HERE/lib/pkgrepo-lib.sh" || die "packaged library not found: $HERE/lib/pkgrepo-lib.sh"
 
@@ -133,17 +133,38 @@ signed="$work/signed.jsonl"
 : >"$signed"
 add() { "$JQ" -cn --arg p "$1" --arg t "$2" --arg h "$(sha "$gen/$1")" --argjson s "$(size "$gen/$1")" \
   '{path: $p, class: "entrypoint", content_type: $t, sha256: $h, size: $s}' >>"$signed"; }
-G() { gpg --batch --yes --quiet --local-user "$fpr" --digest-algo SHA512 "$@"; }
+# DETERMINISTIC SIGNATURES. Resuming an interrupted publication regenerates
+# and re-signs the same generation, and immutable storage refuses a signature
+# object with different bytes. An OpenPGP signature carries its creation time,
+# so the creation time is fixed: the generation's own timestamp, or the key's
+# creation time if that is later (a signature older than its key is invalid).
+# RSA PKCS#1 v1.5, EdDSA and (libgcrypt's RFC 6979) ECDSA signatures are then
+# byte-identical on every run. Each signature is made twice and compared, so a
+# key whose signatures still vary (e.g. salted v6 signatures) is refused here,
+# not at resume.
+gts="$("$JQ" -r '.timestamp' "$M")"
+case "$gts" in '' | *[!0-9]*) refuse "the generation manifest has no timestamp" ;; esac
+kts="$(printf '%s\n' "$seclist" | awk -F: '/^(sec|ssb):/ && $6 > m {m = $6} END {print m + 0}')"
+sts="$gts"
+[ "$kts" -le "$gts" ] || sts="$kts"
+G() { gpg --batch --yes --quiet --faked-system-time "${sts}!" --local-user "$fpr" --digest-algo SHA512 "$@"; }
+S() { # S OUT IN MODE... — sign twice, keep the first, refuse unless identical
+  local out="$1" in="$2"
+  shift 2
+  G "$@" --output "$out" "$in" || return 1
+  G "$@" --output "$work/again" "$in" || return 1
+  cmp -s "$out" "$work/again" || refuse "the signing key's signatures are not deterministic (e.g. salted v6 signatures); an interrupted publication could not resume"
+}
 
 while IFS= read -r rel; do
   d="$(dirname "$rel")"
-  G --clearsign --output "$gen/$d/InRelease" "$gen/$rel" || refuse "clearsigning $rel failed"
-  G --armor --detach-sign --output "$gen/$d/Release.gpg" "$gen/$rel" || refuse "signing $rel failed"
+  S "$gen/$d/InRelease" "$gen/$rel" --clearsign || refuse "clearsigning $rel failed"
+  S "$gen/$d/Release.gpg" "$gen/$rel" --armor --detach-sign || refuse "signing $rel failed"
   add "$d/InRelease" "text/plain"
   add "$d/Release.gpg" "application/pgp-signature"
 done < <("$JQ" -r '.objects[] | select(.path | endswith("/Release")) | .path' "$M")
 while IFS= read -r rel; do
-  G --armor --detach-sign --output "$gen/$rel.asc" "$gen/$rel" || refuse "signing $rel failed"
+  S "$gen/$rel.asc" "$gen/$rel" --armor --detach-sign || refuse "signing $rel failed"
   add "$rel.asc" "application/pgp-signature"
 done < <("$JQ" -r '.objects[] | select(.path | endswith("/repodata/repomd.xml")) | .path' "$M")
 

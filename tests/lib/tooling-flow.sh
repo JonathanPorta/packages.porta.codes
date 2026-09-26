@@ -268,16 +268,24 @@ mkdir -p "$FAKE_STORE/o"
 publish "$WORK/g1" "$WORK/inv1.json" none >/dev/null 2>&1
 RI="$(activation)"
 rc=0
-FAKE_FAIL_PUT_MATCH='*.sources' publish "$WORK/g2" "$WORK/inv2.json" "$RI" >/dev/null 2>&1 || rc=$?
-if [ "$rc" -eq 2 ] && [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = "$G1" ] && [ "$(activation)" = "$RI" ]; then
-  ok "a publication interrupted mid-upload activates nothing; the live activation is unchanged"
+# Interrupted AFTER every object — the APT and DNF signatures included — was
+# stored (the generation record is the last write before activation).
+FAKE_FAIL_PUT_MATCH='_state/generations/*' publish "$WORK/g2" "$WORK/inv2.json" "$RI" >/dev/null 2>&1 || rc=$?
+sigs="$(find "$FAKE_STORE/o/_generations/$G2" -name InRelease -o -name Release.gpg -o -name repomd.xml.asc 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$rc" -eq 2 ] && [ "$sigs" -ge 3 ] && [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = "$G1" ] && [ "$(activation)" = "$RI" ]; then
+  ok "a publication interrupted after its APT and DNF signatures were stored activates nothing"
 else
   bad "the interrupted publication left the wrong state (rc=$rc)"
 fi
-if out="$(publish "$WORK/g2" "$WORK/inv2.json" "$(activation)" 2>&1)" && [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = "$G2" ] &&
+# The workflow's recovery: discard the signed tree, regenerate and re-sign
+# from scratch (a later wall clock), publish again.
+sleep 1
+rm -rf "$WORK/g2x"
+build_gen "$WORK/inv2.json" "$WORK/g2x" $((TS + 100)) "$WORK/pool2" 2>/dev/null
+if out="$(publish "$WORK/g2x" "$WORK/inv2.json" "$(activation)" 2>&1)" && [ "$(jq -r .generation_id "$FAKE_STORE/o/_state/generation.json")" = "$G2" ] &&
   [ -z "$(grep '^put ' "$FAKE_LOG" | awk '{print $2}' | sort | uniq -d)" ] &&
   diff -r -x _state "$WORK/served-g2/o" "$FAKE_STORE/o" >/dev/null; then
-  ok "…re-running the workflow resumes (nothing rewritten) and stores exactly generation 2"
+  ok "…re-running the workflow (regenerate + re-sign) resumes with nothing rewritten and stores exactly generation 2"
 else
   bad "the interrupted publication did not resume to generation 2"
   note "$out"
