@@ -127,9 +127,9 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
    nothing and rotates nothing; kioskd's existing candidate key is reused
    (`keys/candidates/kioskd.json`).
 3. Commit the public halves and fingerprints (`keys/`, `inventory/layout.json`).
-4. For each authority domain, `scripts/bws/bootstrap.sh … --no-secret-values`
-   (the script prints each command), then paste the value in the Bitwarden web
-   UI:
+4. For each authority domain, `make bws-bootstrap APP_NAME=<project> ARGS="…
+   --no-secret-values"` (PROVISIONING.md §4 has every command), then paste the
+   value in the Bitwarden web UI:
 
    | Domain | BWS project / machine account | Environment | Secret |
    |---|---|---|---|
@@ -139,8 +139,11 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
    | producer RPM signing (in each producer) | `<repo>-rpm-signing` / `…-ci` | per producer | `<REPO>_RPM_SIGNING_KEY` |
    | producer candidate signing (corpus, keysprout) | `<repo>-release-signing` / `…-ci` | per producer | `<REPO>_RELEASE_SIGNING_KEY` |
 
-   The loaders (`.github/actions/load-*`) carry placeholder UUIDs until the
-   bootstrapper fills them; every workflow refuses to run while they do.
+   Each domain is one `profile` of the ONE loader,
+   `.github/actions/load-secrets/action.yml`, declared in `blessed.yml`
+   `secret_authorities`. Its lines carry placeholder UUIDs until the
+   bootstrapper fills them; every workflow refuses to run while its domain's
+   line does.
 5. `make plan TF_WORKSPACE=production`, review `plan.out`, `make deploy`.
 6. Admit the first candidates, merge, and watch **Publish**.
 

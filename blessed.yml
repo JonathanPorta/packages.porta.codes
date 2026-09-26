@@ -1,0 +1,129 @@
+# blessed/repo/v1
+# Repo-local manifest: what this repository is, which standards it has ADOPTED,
+# and — authoritatively — which authority domains exist and what each may read
+# or assume (secrets.bwsm-authority-domains@1).
+
+schema: blessed/repo/v1
+
+project: packages
+component: package-repository-surface
+repo_type: static-site
+stage: prototype
+
+stack:
+  - terraform
+  - aws-s3
+  - cloudflare
+  - cloudflare-workers
+  - github-actions
+
+standards:
+  # Only standards whose requirements this repository meets today. `make help`
+  # exposes every makefile.core@1 target and the static-site profile verbs.
+  - makefile.core@1
+  - makefile.profiles@1
+  # NOT declared yet — each needs evidence this repository does not have until
+  # provisioning and the first publication (PROVISIONING.md, APPROVAL.md):
+  #   secrets.bwsm-authority-domains@1   declarations, the one profile-aware
+  #                                      loader and the live Environment policies
+  #                                      exist; the BWS projects, machine
+  #                                      accounts and access proofs do not yet.
+  #   releases.surfaces@1, releases.package-repositories@1
+  #                                      declared surface and tooling exist; no
+  #                                      publication, read-back or replay yet.
+
+capabilities:
+  - bwsm
+  - blessed-scripts
+  - sha-pinning
+  - repo-protection
+  - ai-rules-subtree
+  - static-site-terraform
+
+secret_authorities:
+  # There is NO `default` domain: no repository-level BWS_ACCESS_TOKEN exists,
+  # and .github/actions/load-secrets fails closed on the `default` profile.
+
+  candidate-ingest:
+    authority_type: bwsm
+    github_scope: environment
+    github_environment: candidate-ingest
+    github_secret: BWS_ACCESS_TOKEN
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    bwsm_project: packages-porta-codes-candidate-ingest
+    # CLOSED SET — exactly one project.
+    bwsm_allowed_projects:
+      - packages-porta-codes-candidate-ingest
+    machine_account: packages-porta-codes-candidate-ingest-ci
+    # Fine-grained PAT: Contents read-only on JonathanPorta/kioskd, corpus,
+    # keysprout; nothing else (APPROVAL.md §4).
+    injects:
+      - PACKAGES_CANDIDATE_READ_TOKEN
+    # RECEIVER: admission and publication run trusted code from `main`, like
+    # docsort.io's candidate-ingest. Main-only is the exact allowed ref.
+
+  repository-signing:
+    authority_type: bwsm
+    github_scope: environment
+    github_environment: repository-signing
+    github_secret: BWS_ACCESS_TOKEN
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    bwsm_project: packages-porta-codes-repo-signing
+    bwsm_allowed_projects:
+      - packages-porta-codes-repo-signing
+    machine_account: packages-porta-codes-repo-signing-ci
+    # The ARMORED OpenPGP repository key (RSA 4096). The sign job receives only
+    # this; it has no contents: write, no candidate token and no AWS identity.
+    injects:
+      - PACKAGES_REPO_SIGNING_KEY
+
+  repository-publication:
+    authority_type: oidc
+    github_scope: environment
+    github_environment: repository-publication
+    github_secret: null
+    bwsm_project: null
+    machine_account: null
+    injects: []
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    oidc:
+      audience: sts.amazonaws.com
+      subject: repo:JonathanPorta/packages.porta.codes:environment:repository-publication
+      # Created by this repository's Terraform (main.tf aws_iam_role.publisher).
+      target_role: arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-publisher
+    permits:
+      # s3:ListBucket only distinguishes a missing object from a forbidden one.
+      # The bucket policy additionally forces If-None-Match on every object but
+      # the pointer, If-Match/If-None-Match on the pointer, and denies deletes.
+      actions:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:ListBucket
+      resources:
+        - arn:aws:s3:::packages.porta.codes
+        - arn:aws:s3:::packages.porta.codes/*
+
+tracked_dependencies:
+  ai_rules:
+    origin: https://github.com/JonathanPorta/ai-rules
+    subtree_split: 3d9610b90cc7c0d1b6dfe58bd8e68bb544df93f7
+  blessed_scripts:
+    bws: 1.9.1
+    signing: 0.3.0
+    release: 0.5.0
+
+waivers: []
+
+notes: |
+  The signed static APT/DNF repositories for kioskd, corpus and keysprout
+  (blessed-cicd #303, #74, #81). The approved design and its owner decisions
+  are in APPROVAL.md; the credential walkthrough is PROVISIONING.md.

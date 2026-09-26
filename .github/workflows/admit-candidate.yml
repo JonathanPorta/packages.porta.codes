@@ -53,13 +53,14 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9][0-9A-Za-z.+~-]*$ ]] || { echo "::error::tag '$TAG' is not vX.Y.Z"; exit 1; }
-          if grep -q '00000000-0000-0000-0000-000000000001' .github/actions/load-candidate-ingest/action.yml; then
+          if grep -Eq '^ *00000000-0000-0000-0000-[0-9a-fA-F]{12} > PACKAGES_CANDIDATE_READ_TOKEN$' .github/actions/load-secrets/action.yml; then
             echo "::error::candidate-ingest is not provisioned (placeholder UUID). See README Provisioning."; exit 1
           fi
 
       - name: 🔐 Load the producer read token
-        uses: ./.github/actions/load-candidate-ingest
+        uses: ./.github/actions/load-secrets
         with:
+          profile: candidate-ingest
           access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
 
       - name: 📦 Fetch the COMPLETE release asset set

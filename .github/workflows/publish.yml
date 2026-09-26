@@ -91,12 +91,13 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - name: 🚦 Provisioning
         run: |
-          if grep -q '00000000-0000-0000-0000-000000000001' .github/actions/load-candidate-ingest/action.yml; then
+          if grep -Eq '^ *00000000-0000-0000-0000-[0-9a-fA-F]{12} > PACKAGES_CANDIDATE_READ_TOKEN$' .github/actions/load-secrets/action.yml; then
             echo "::error::candidate-ingest is not provisioned (placeholder UUID). See README Provisioning."; exit 1
           fi
       - name: 🔐 Load the producer read token
-        uses: ./.github/actions/load-candidate-ingest
+        uses: ./.github/actions/load-secrets
         with:
+          profile: candidate-ingest
           access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
       - name: 📥 Fetch every package, each checked against the inventory
         run: |
@@ -159,12 +160,13 @@ jobs:
           path: generation
       - name: 🚦 Provisioning
         run: |
-          if grep -q '00000000-0000-0000-0000-000000000002' .github/actions/load-repository-signing/action.yml; then
+          if grep -Eq '^ *00000000-0000-0000-0000-[0-9a-fA-F]{12} > PACKAGES_REPO_SIGNING_KEY$' .github/actions/load-secrets/action.yml; then
             echo "::error::repository-signing is not provisioned (placeholder UUID). See README Provisioning."; exit 1
           fi
       - name: 🔐 Load the repository key
-        uses: ./.github/actions/load-repository-signing
+        uses: ./.github/actions/load-secrets
         with:
+          profile: repository-signing
           access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
       - name: ✍️ Sign InRelease, Release.gpg, repomd.xml.asc
         env:

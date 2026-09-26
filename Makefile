@@ -1,6 +1,16 @@
-# packages.porta.codes — the command surface (blessed makefile.core@1 plus the
-# static-site plan/deploy/verify-edge verbs). CI and operators call these
-# targets, never raw tools. `make help` lists the public contract.
+# packages.porta.codes — the command surface. CI and operators call these
+# targets, never raw tools. A target is public iff it carries a `## ` help
+# description, so `make help` IS the contract:
+#
+#   makefile.core@1           help deps install dev format check test build docs clean
+#   makefile.profiles@1       static site: plan deploy verify-edge
+#   makefile.capability-verbs blessed scripts: sync-scripts verify-scripts
+#                             Bitwarden Secrets Manager: bws-bootstrap bws-load
+#
+# This is a superset of the static-site class surface (blessed-cicd
+# templates/Makefile: build check clean deploy dev help plan test verify-edge).
+# `validate`, `tools-image`, `cloudflare-token` and `require-workspace` are
+# internal.
 .DEFAULT_GOAL := help
 SHELL := bash
 
@@ -10,18 +20,37 @@ TOOLS_IMAGE ?= ppc-tools
 # Terraform acts on exactly one declared workspace; nothing is inferred.
 TF_WORKSPACE ?=
 
-.PHONY: help deps check test build clean plan deploy verify-edge validate cloudflare-token \
-	sync-scripts verify-scripts tools-image require-workspace
+.PHONY: help deps install dev format check test build docs clean plan deploy verify-edge \
+	sync-scripts verify-scripts bws-bootstrap bws-load \
+	validate cloudflare-token tools-image require-workspace
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+install: deps ## Developer setup: verify the toolchain (this repo installs no hooks or local tools)
+	@echo "install: nothing further to install; see README for the toolchain."
+
+dev: ## No interactive loop: a static repository has no server here — use `make test` (offline end to end)
+	@echo "dev: this repository has no local server; 'make test' runs admission → publication → real clients offline."
+
+format: ## Apply formatting: shfmt to this repo's scripts, terraform fmt
+	shfmt -i 2 -ci -w $(OWN_SCRIPTS)
+	terraform fmt -recursive
+
+docs: ## Validate the operator docs: every relative link in the top-level Markdown resolves
+	@rc=0; for f in *.md; do \
+	  for l in $$(grep -oE '\]\([^)]+\)' "$$f" | sed -E 's/^\]\(//; s/\)$$//; s/#.*//' | grep -v -e '://' -e '^mailto:' -e '^$$' | sort -u); do \
+	    [ -e "$$l" ] || { echo "$$f: broken link $$l"; rc=1; }; \
+	  done; \
+	done; if [ $$rc -eq 0 ]; then echo "docs: all relative links resolve"; fi; exit $$rc
 
 deps: ## Check the local toolchain (jq, yq, shellcheck, shfmt, actionlint, terraform, docker)
 	@missing=0; for t in jq yq shellcheck shfmt actionlint terraform docker; do \
 	  command -v $$t >/dev/null 2>&1 || { echo "missing: $$t"; missing=1; }; done; \
 	[ $$missing -eq 0 ] && echo "deps OK"
 
-tools-image: ## Build the pinned toolchain image (tools/Dockerfile)
+# Internal: build the pinned toolchain image (tools/Dockerfile).
+tools-image:
 	docker build -q -t $(TOOLS_IMAGE) tools
 
 check: verify-scripts validate ## Static checks: scripts, workflows, Terraform, surface and inventory
@@ -31,7 +60,8 @@ check: verify-scripts validate ## Static checks: scripts, workflows, Terraform, 
 	terraform fmt -check -recursive
 	@if [ -d .terraform ]; then terraform validate; else echo "terraform validate: skipped (run terraform init with backend access first)"; fi
 
-validate: ## Validate release-surfaces.yaml and, when present, the inventory
+# Internal (called by check): release-surfaces.yaml and, when present, the inventory.
+validate:
 	bash scripts/release/validate-surfaces.sh --file release-surfaces.yaml
 	@if [ -f inventory/inventory.json ]; then bash scripts/release/validate-package-inventory.sh --file inventory/inventory.json; \
 	else echo "inventory/inventory.json: none yet (created by the first admission)"; fi
@@ -55,6 +85,17 @@ verify-scripts: ## Verify vendored blessed-cicd scripts against their MANIFEST.s
 	  else echo "scripts/$$c: DRIFT — files differ from MANIFEST.sha256"; rc=1; fi; \
 	done; exit $$rc
 
+bws-bootstrap: verify-scripts ## Bootstrap one authority domain: APP_NAME=<BWS project> ARGS="--secrets-list … --project-id-file … --gh-environments …" (PROVISIONING.md §4)
+	@if [ -z "$(APP_NAME)" ] || [ -z "$(ARGS)" ]; then echo "refusing: set APP_NAME and ARGS — this repo has no default domain; see PROVISIONING.md §4"; exit 1; fi
+	scripts/bws/bootstrap.sh --app-name $(APP_NAME) $(ARGS)
+
+bws-load: ## Print how to load a domain's secrets locally (this repo's secrets are CI-only)
+	@echo "Every secret here belongs to a CI-only authority domain (repository-signing,"
+	@echo "candidate-ingest) and is loaded in CI by .github/actions/load-secrets with its"
+	@echo "profile. None is needed locally. To inspect a domain as the operator:"
+	@echo "    export BWS_ACCESS_TOKEN=<that domain's read token>   # hidden: read -rs BWS_ACCESS_TOKEN"
+	@echo "    BWS_SECRETS_LIST_FILE=.bws/<domain>.list source scripts/bws/load.sh"
+
 require-workspace:
 	@[ "$(TF_WORKSPACE)" = production ] || { echo "refusing: set TF_WORKSPACE=production explicitly (this surface has one workspace)"; exit 1; }
 
@@ -65,7 +106,9 @@ AWS_PROFILE ?= portaj
 CF_KEYCHAIN_ITEM := packages-porta-codes-terraform-cloudflare
 WITH_CREDS = AWS_PROFILE=$(AWS_PROFILE) CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN:-$$(security find-generic-password -s $(CF_KEYCHAIN_ITEM) -w 2>/dev/null)}"
 
-cloudflare-token: ## Store the operator's Cloudflare API token in the macOS keychain (hidden prompt)
+# Internal operator helper: store the operator's Cloudflare API token in the
+# macOS keychain through a hidden prompt (read by plan, deploy and verify-edge).
+cloudflare-token:
 	@security add-generic-password -U -s $(CF_KEYCHAIN_ITEM) -a terraform -w
 	@echo "stored in keychain item $(CF_KEYCHAIN_ITEM)"
 

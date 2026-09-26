@@ -33,20 +33,23 @@ other existing credential are **not touched**. Nothing here rotates anything.
   | corpus | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main |
   | keysprout | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main (and dispatch from main) |
 
-- [ ] The producers' **declaration PRs** are merged, so each producer's `main`
-      carries its `.bws/<domain>.list`, `.bws/<domain>.env` (placeholder
-      project id) and `.github/actions/load-<domain>/action.yml` (placeholder
-      secret UUID) — the files the bootstrapper fills in:
+- [ ] The producers' **declaration PRs** are merged, so each repository's
+      `main` carries, per domain: `.bws/<domain>.list` (the generator's key
+      declaration), `.bws/<domain>.env` (placeholder project id), the domain's
+      `secret_authorities` entry in `blessed.yml`, and the domain's **profile**
+      in the repository's ONE loader, `.github/actions/load-secrets/action.yml`
+      (`<all-zero UUID> > <secret>` placeholder, filled by the bootstrapper —
+      secrets.bwsm-authority-domains@1):
 
-  | Repository | Files (placeholders) | Secret name in the list |
+  | Repository | Domain → loader profile | Secret |
   |---|---|---|
-  | packages.porta.codes | `.bws/repository-signing.{list,env}`, `.github/actions/load-repository-signing/action.yml` | `PACKAGES_REPO_SIGNING_KEY` |
-  | packages.porta.codes | `.bws/candidate-ingest.{list,env}`, `.github/actions/load-candidate-ingest/action.yml` | `PACKAGES_CANDIDATE_READ_TOKEN` |
-  | kioskd | `.bws/rpm-signing.{list,env}`, `.github/actions/load-rpm-signing/action.yml` | `KIOSKD_RPM_SIGNING_KEY` |
-  | corpus | `.bws/rpm-signing.{list,env}`, `.github/actions/load-rpm-signing/action.yml` | `CORPUS_RPM_SIGNING_KEY` |
-  | corpus | `.bws/release-signing.{list,env}`, `.github/actions/load-release-signing/action.yml` | `CORPUS_RELEASE_SIGNING_KEY` |
-  | keysprout | `.bws/rpm-signing.{list,env}`, `.github/actions/load-rpm-signing/action.yml` | `KEYSPROUT_RPM_SIGNING_KEY` |
-  | keysprout | `.bws/release-signing.{list,env}`, `.github/actions/load-release-signing/action.yml` | `KEYSPROUT_RELEASE_SIGNING_KEY` |
+  | packages.porta.codes | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` |
+  | packages.porta.codes | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` |
+  | kioskd | `rpm-signing` | `KIOSKD_RPM_SIGNING_KEY` |
+  | corpus | `rpm-signing` | `CORPUS_RPM_SIGNING_KEY` |
+  | corpus | `release-signing` | `CORPUS_RELEASE_SIGNING_KEY` |
+  | keysprout | `rpm-signing` | `KEYSPROUT_RPM_SIGNING_KEY` |
+  | keysprout | `release-signing` | `KEYSPROUT_RELEASE_SIGNING_KEY` |
 
 ## 1. Your prerequisites
 
@@ -112,15 +115,18 @@ anywhere else.
 
 For **each row**, in the listed directory:
 
+Through the repository's canonical `make bws-bootstrap` surface
+(makefile.capability-verbs). `APP_NAME` is the domain's BWS project; the
+loader is the default `.github/actions/load-secrets/action.yml`, where the
+bootstrapper rewrites only this domain's `<placeholder> > <secret>` line:
+
 ```sh
 cd <directory>
 git switch main && git pull --ff-only && git switch -c jp/c/bws-<domain>
-scripts/bws/bootstrap.sh --app-name <project> --secrets-list .bws/<domain>.list \
-  --loader .github/actions/load-<domain>/action.yml --project-id-file .bws/<domain>.env \
-  --gh-environments <environment> --plan                      # (a) read-only preview
-scripts/bws/bootstrap.sh --app-name <project> --secrets-list .bws/<domain>.list \
-  --loader .github/actions/load-<domain>/action.yml --project-id-file .bws/<domain>.env \
-  --gh-environments <environment> --no-secret-values          # (b) create
+make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
+  --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"            # (a) read-only preview
+make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
+  --project-id-file .bws/<domain>.env --gh-environments <environment> --no-secret-values" # (b) create
 ```
 
 (b) creates the BWS project `<project>`, then prints the web-UI steps for the
@@ -141,7 +147,8 @@ token. Do exactly these in the Bitwarden web vault:
    paste; multi-line armor is fine), or the PAT for row 2.
 
 Then re-run (b) once more: it finds the secret and fills the placeholder UUIDs
-in `.bws/<domain>.env` and the loader. **Leave those edits uncommitted** (they
+in `.bws/<domain>.env` and in this domain's line of
+`.github/actions/load-secrets/action.yml`. **Leave those edits uncommitted** (they
 hold IDs, not secrets); I review and open the PR for them.
 
 | # | Directory | `<domain>` | `<project>` (machine account `<project>-ci`) | `<environment>` | `<secret>` ← value |
@@ -167,9 +174,8 @@ In each directory, per row, the read-only inventory — it reads project and
 secret NAMES and GitHub secret NAMES, never a value:
 
 ```sh
-scripts/bws/bootstrap.sh --app-name <project> --secrets-list .bws/<domain>.list \
-  --loader .github/actions/load-<domain>/action.yml --project-id-file .bws/<domain>.env \
-  --gh-environments <environment> --plan
+make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
+  --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"
 gh api repos/JonathanPorta/<repo>/environments/<environment>/secrets --jq '.secrets[].name'   # expect: BWS_ACCESS_TOKEN
 ```
 
