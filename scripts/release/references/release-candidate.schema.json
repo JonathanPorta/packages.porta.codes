@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/release-candidate/v1",
+  "title": "blessed/release-candidate/v1",
+  "description": "Immutable producer candidate manifest (releases.candidate@1). Says WHAT was built as a CLOSED, fully-hashed file set. Channel-neutral: canary/stable belong to promotion, not candidate truth. Contains no surface-specific public URLs. The manifest itself is signed with ed25519-detached-v1 for every promoted candidate; per-artifact signatures are additionally required for unattended executable install and may declare a runtime-native profile.",
+  "type": "object",
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "fullSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "safeBasename": {
+      "description": "Basename only — no path separators, no traversal, no leading dot.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+    }
+  },
+  "required": [
+    "schema",
+    "project",
+    "component",
+    "version",
+    "tag",
+    "producer_repo",
+    "source_sha",
+    "build_sha",
+    "created_at",
+    "signing",
+    "public_notes",
+    "artifacts",
+    "files"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/release-candidate/v1" },
+    "project": { "type": "string", "minLength": 1 },
+    "component": { "type": "string", "minLength": 1 },
+    "version": {
+      "description": "Anchored MAJOR.MINOR.PATCH[-PRERELEASE]. Build metadata (+build) is NOT supported in candidate versions, so `tag == \"v\" + version` always holds.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+    },
+    "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" },
+    "producer_repo": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+    "source_sha": { "$ref": "#/$defs/fullSha" },
+    "build_sha": { "$ref": "#/$defs/fullSha" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "signing": {
+      "description": "Candidate-envelope signing metadata that is COVERED BY the manifest signature (it lives inside the signed bytes). This is the producer->verifier path for the manifest key: the verifier reads key_id ONLY to select a public key from its baked/pinned trust store, then verifies the exact manifest bytes with that key BEFORE trusting key_id or anything else here. profile/key_id describe the candidate envelope and are the inherited defaults for artifact signatures; artifacts records whether per-artifact signatures are required. The manifest signature itself is the envelope and is not in `files`.",
+      "type": "object",
+      "required": ["profile", "key_id", "manifest_signature", "artifacts"],
+      "additionalProperties": false,
+      "properties": {
+        "profile": { "const": "ed25519-detached-v1" },
+        "key_id": {
+          "description": "Names a public key in the verifier's baked trust store (e.g. kioskitd-2026-01). Untrusted until the manifest signature verifies.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "manifest_signature": { "const": "release-candidate.json.sig" },
+        "artifacts": {
+          "description": "'required' for unattended executable install (per-artifact .sig mandatory); 'optional' otherwise.",
+          "type": "string",
+          "enum": ["required", "optional"]
+        }
+      }
+    },
+    "public_notes": {
+      "type": "object",
+      "required": ["filename", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "filename": { "const": "release-notes-public.md" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "artifacts": {
+      "description": "Installable outputs. Selection is (platform, install_kind) or id — one platform may have several outputs (binary/tarball/rpm/deb), so platform alone is ambiguous.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "filename", "platform", "install_kind", "size", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Stable, unique artifact identity (e.g. linux-amd64-tarball).",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "filename": { "$ref": "#/$defs/safeBasename" },
+          "platform": {
+            "type": "string",
+            "pattern": "^(any|[a-z0-9]+/[a-z0-9_]+)$",
+            "description": "'any' or os/arch, e.g. linux/amd64, darwin/arm64, windows/amd64."
+          },
+          "install_kind": {
+            "type": "string",
+            "enum": ["binary", "tarball", "appimage", "dmg", "msi", "exe", "rpm", "deb", "archive", "image", "other"]
+          },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "signature": { "$ref": "#/$defs/safeBasename" },
+          "signature_profile": {
+            "description": "Optional per-artifact signature profile. v1 recognizes the Tauri native updater adapter only. If absent, inherits top-level signing.profile. If present, signature and signature_key_id must also be present (enforced by semantic validation).",
+            "type": "string",
+            "const": "tauri-minisign-v1"
+          },
+          "signature_key_id": {
+            "description": "Optional per-artifact key id. If absent, inherits top-level signing.key_id. If present, signature and signature_profile must also be present (enforced by semantic validation).",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "sbom": { "$ref": "#/$defs/safeBasename" }
+        }
+      }
+    },
+    "files": {
+      "description": "CLOSED set of the candidate PAYLOAD files, each hashed: installers, SHA256SUMS, per-artifact .sig, SBOMs, release-notes-public.md, provenance. The manifest (release-candidate.json) and its detached signature (release-candidate.json.sig) are the ENVELOPE and are NOT listed here (self-reference would be circular). The published candidate = these two envelope files + exactly the files listed here; the surface rejects anything else.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "role", "size", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "$ref": "#/$defs/safeBasename" },
+          "role": {
+            "type": "string",
+            "enum": ["artifact", "checksums", "signature", "sbom", "notes", "provenance", "other"]
+          },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    }
+  }
+}

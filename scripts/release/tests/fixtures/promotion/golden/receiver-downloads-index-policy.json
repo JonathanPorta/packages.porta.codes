@@ -1,0 +1,77 @@
+{
+  "schema": "blessed/downloads-index-renderer-config/v1",
+  "target_format": "docsort.io/downloads-index/v1",
+  "artifacts": {
+    "linux-appimage": {
+      "include": {
+        "arch": "",
+        "content_type": "application/octet-stream",
+        "id": "linux-appimage",
+        "kind": "appimage",
+        "label": "Linux (AppImage)",
+        "os": "linux",
+        "primary": true
+      }
+    },
+    "linux-deb": {
+      "include": {
+        "arch": "",
+        "content_type": "application/octet-stream",
+        "id": "linux-deb",
+        "kind": "deb",
+        "label": "Linux (.deb)",
+        "os": "linux",
+        "primary": false
+      }
+    },
+    "macos-appzip": {
+      "include": {
+        "arch": "",
+        "content_type": "application/octet-stream",
+        "id": "macos-appzip",
+        "kind": "appzip",
+        "label": "macOS (app bundle)",
+        "os": "macos",
+        "primary": false
+      }
+    },
+    "macos-dmg": {
+      "include": {
+        "arch": "",
+        "content_type": "application/x-apple-diskimage",
+        "id": "macos-dmg",
+        "kind": "dmg",
+        "label": "macOS (.dmg)",
+        "os": "macos",
+        "primary": true
+      }
+    },
+    "windows-msi": {
+      "include": {
+        "arch": "",
+        "content_type": "application/octet-stream",
+        "id": "windows-msi",
+        "kind": "msi",
+        "label": "Windows (.msi)",
+        "os": "windows",
+        "primary": false
+      }
+    },
+    "windows-exe": {
+      "include": {
+        "arch": "",
+        "content_type": "application/octet-stream",
+        "id": "windows-exe",
+        "kind": "exe",
+        "label": "Windows (.exe)",
+        "os": "windows",
+        "primary": true
+      }
+    },
+    "macos-updater": {
+      "exclude": {
+        "reason": "Tauri updater payload; consumed by the installed client, never offered as a site download."
+      }
+    }
+  }
+}

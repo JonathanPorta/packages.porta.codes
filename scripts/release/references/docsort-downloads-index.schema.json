@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/docsort-downloads-index/v1",
+  "title": "docsort.io/downloads-index/v1 (ADAPTER-LOCAL)",
+  "description": "A strict description of the FOREIGN index format published by docsort.io. This is NOT a Blessed contract and is not a universal downloads-index schema: it exists so the bounded adapter can validate the file it is about to replace, and so retained history is provably preserved rather than discarded. Another site's index needs its own adapter, schema, controls, and release. URLs here are SITE-RELATIVE paths under base_url, not absolute; sizes are `size_bytes`; assets carry presentation fields the signed candidate never states.",
+  "type": "object",
+  "required": ["schema", "project", "base_url", "latest", "versions"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "docsort.io/downloads-index/v1" },
+    "project": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "base_url": {
+      "description": "Site-relative prefix, no trailing slash. Derived from the surface declaration's public_base_url, never supplied by renderer policy.",
+      "type": "string",
+      "pattern": "^/[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*$"
+    },
+    "latest": {
+      "description": "Tag of versions[0]. Checked for equality, never trusted as an independent claim.",
+      "type": "string",
+      "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/version" }
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "object",
+      "required": ["tag", "version", "published_at", "notes", "notes_url", "manifest_url", "assets"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "published_at": { "type": "string", "format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+        "notes": {
+          "description": "The public release notes inlined verbatim. The adapter reads these bytes from the candidate's notes file after checking them against public_notes.sha256; it never composes or reformats them.",
+          "type": "string",
+          "minLength": 1
+        },
+        "notes_url": { "type": "string", "pattern": "^/[A-Za-z0-9._~/-]+$" },
+        "manifest_url": { "type": "string", "pattern": "^/[A-Za-z0-9._~/-]+$" },
+        "assets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/asset" } }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "required": ["id", "label", "os", "arch", "kind", "primary", "filename", "url", "content_type", "size_bytes", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "os": { "enum": ["macos", "windows", "linux", "any"] },
+        "arch": { "type": "string", "maxLength": 32, "pattern": "^([a-z0-9_-]{1,32})?$" },
+        "kind": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "primary": { "type": "boolean" },
+        "filename": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^/[A-Za-z0-9._~/-]+$" },
+        "content_type": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$" },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

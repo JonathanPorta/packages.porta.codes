@@ -1,0 +1,102 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListOnlyThisStacksState",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::deployments-state",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "terraform-state/packages.porta.codes*"
+        }
+      }
+    },
+    {
+      "Sid": "ReadWriteThisStacksState",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::deployments-state/terraform-state/packages.porta.codes"
+    },
+    {
+      "Sid": "HoldThisStacksLock",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::deployments-state/terraform-state/packages.porta.codes.tflock"
+    },
+    {
+      "Sid": "ReadTheBucketConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:Get*",
+        "s3:List*"
+      ],
+      "Resource": "arn:aws:s3:::packages.porta.codes"
+    },
+    {
+      "Sid": "ManageTheBucketConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketTagging",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketAcl",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketVersioning",
+        "s3:PutBucketWebsite",
+        "s3:DeleteBucketWebsite"
+      ],
+      "Resource": "arn:aws:s3:::packages.porta.codes"
+    },
+    {
+      "Sid": "ManageOnlyTheSiteObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectAcl",
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersion",
+        "s3:PutObject",
+        "s3:PutObjectAcl",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::packages.porta.codes/index.html"
+    },
+    {
+      "Sid": "ReadTheGitHubOIDCProvider",
+      "Effect": "Allow",
+      "Action": "iam:GetOpenIDConnectProvider",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "ReadTheAdoptedRoles",
+      "Effect": "Allow",
+      "Action": "iam:GetRole",
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-publisher",
+        "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-terraform-plan",
+        "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-terraform-apply"
+      ]
+    },
+    {
+      "Sid": "ManageOnlyThePublishersInlinePolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-publisher"
+    }
+  ]
+}

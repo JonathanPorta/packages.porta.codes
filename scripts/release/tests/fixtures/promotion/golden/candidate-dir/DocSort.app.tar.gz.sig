@@ -1,0 +1,4 @@
+untrusted comment: signature from tauri secret key
+RUQZcoIqfjApA7eDGHzkL8VZbBQ28bsvcV7PN4dTQsIVIg5AZ4sg1bFEUi88Yf0KAHpwxY4njSAgxisnb8ZFyuSd8puQmqOmSQw=
+trusted comment: timestamp:1786584134	file:DocSort.app.tar.gz
+CofOg2YmwMwAVFcngz0/6SxeJ8V/2TBcNNMxk0obogJo2K7EUauL2AdKJbKjP+5DWdOr0dvhfx4RZ0Z85L0dCQ==

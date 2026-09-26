@@ -1,0 +1,14 @@
+{
+  "schema": "blessed/release-receipt/v1",
+  "producer_repo": "JonathanPorta/pilot",
+  "release_id": 199884413,
+  "tag": "v0.4.3",
+  "target_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-08-13T01:24:49Z",
+  "manifest_asset": {
+    "name": "release-candidate.json",
+    "sha256": "7d619c94ef491a71ee5420ccffc924edee8bf365f07e3b953fb8cf48a8e06dba"
+  }
+}

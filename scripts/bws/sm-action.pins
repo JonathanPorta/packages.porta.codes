@@ -1,0 +1,70 @@
+# Pinned bitwarden/sm-action native binaries — PROVENANCE + DIGESTS.
+#
+# WHY THIS FILE EXISTS
+#
+# sm-action v3 replaced its NAPI implementation with a Rust binary, fixing
+# Node 24 / darwin-arm64 — but its index.js (~6KB) downloads a release asset at
+# runtime, chmod 0755's it, and execSync's it with NO digest check and NO
+# signature. Pinning the ACTION to a commit SHA therefore pins the downloader,
+# not the code that runs. GitHub release assets are mutable (deletable and
+# re-uploadable under the same tag), so the executed bytes were unpinned.
+#
+# Worse than a bare missing digest, in two specific ways:
+#   1. getVersion() honours the SM_ACTION_VERSION environment variable and
+#      interpolates it into the download URL, so any earlier step or job-level
+#      env can redirect which binary is fetched and executed;
+#   2. on download failure it silently falls back to `rustup target add` +
+#      `cargo build --release`, compiling and running code from the action tree.
+#
+# scripts/bws/sm-action-run.sh downloads the asset itself and verifies it against
+# the digests below BEFORE the file is made executable. Mismatch is fatal. There
+# is no source-build fallback, and SM_ACTION_VERSION is unset.
+#
+# RUNTIME MUST NEVER FETCH ITS EXPECTED DIGEST FROM UPSTREAM. The values here are
+# the trust anchor; asking the server what the right answer is would verify
+# nothing. sm-action-run.sh reads only this file.
+#
+# PROVENANCE
+#   upstream release : v3.0.1  (2026-07-09)
+#   source commit    : 1238aae8fc64b212641190a9227c8a734ab1a793
+#   digest source    : GitHub release-asset API `.assets[].digest`
+#   digests read on  : 2026-07-29   (when WE queried the API)
+#
+# TO BUMP: change VERSION, re-measure every row from the GitHub API, review the
+# diff, and confirm each digest yourself. Never hand-edit a digest, and never
+# copy one from a build log.
+#
+# SUPPORTED PLATFORM MATRIX
+#   aarch64-apple-darwin        PROVEN   — canary: macos-latest
+#   x86_64-unknown-linux-gnu    PROVEN   — canary: ubuntu-latest
+#   aarch64-unknown-linux-gnu   PROVEN   — canary: ubuntu-24.04-arm
+#   x86_64-apple-darwin         UNPROVEN — pinned, no canary (no Intel runner)
+#   *-pc-windows-msvc           UNPROVEN — pinned, no canary; sm-action-run.sh is
+#                                          bash and expects a POSIX runner. Do not
+#                                          rely on Windows until a canary covers it.
+#
+# Columns: sha256 <target-triple> <digest> <asset-name> <bytes> <asset-id> <asset-published>
+#
+# NOTE the two different dates, which are not the same fact and were previously
+# conflated: <asset-published> is the asset's own updated_at from GitHub (when
+# UPSTREAM published those bytes); "digests read on" above is when we queried the
+# API. A row whose published date moves without a digest change would be the
+# interesting anomaly — same bytes, re-uploaded — so both are recorded.
+
+# Targets whose download+verify+execute path is actually exercised by CI
+# (.github/workflows/bws-loader-canary.yml). Anything pinned but NOT listed here
+# is refused at runtime unless SM_ACTION_ALLOW_UNPROVEN=1 is set explicitly.
+# A support matrix written only in prose has no effect on what the script does;
+# consumers reasonably read it as a support statement and would otherwise get
+# best-effort execution on combinations never exercised.
+PROVEN_TARGETS=aarch64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+
+VERSION=3.0.1
+SOURCE_COMMIT=1238aae8fc64b212641190a9227c8a734ab1a793
+
+sha256  aarch64-apple-darwin         a426480977db65e7ae0d50c5e0ba70508ff15bb1fc803a9b9048e5ccda8d1b73  sm-action-aarch64-apple-darwin         6614400  471649591  2026-07-09
+sha256  aarch64-pc-windows-msvc.exe  be716878c305707b7141e9581cdbf292c785f3aa3f7fbb42ac9c5e5460c09dba  sm-action-aarch64-pc-windows-msvc.exe  6300672  471649577  2026-07-09
+sha256  aarch64-unknown-linux-gnu    35dde396e46be03c2b8f711d8ea4c3c75a3b42ab6681a260d614b17fca726989  sm-action-aarch64-unknown-linux-gnu    7445592  471649559  2026-07-09
+sha256  x86_64-apple-darwin          9dfeab4d83b0347f9b5a04e8ca57f816c390b0f1c58a3d3bd7919ebfd3ab1124  sm-action-x86_64-apple-darwin          6854328  471649549  2026-07-09
+sha256  x86_64-pc-windows-msvc.exe   ae9cf1f9c400200cf889f17a44d7b3c9c525b9f462c0acd3cda76efab74e0174  sm-action-x86_64-pc-windows-msvc.exe   7203840  471649540  2026-07-09
+sha256  x86_64-unknown-linux-gnu     fa998e9db775d5c7bdbc0fd8840ac6474a8348cdc989176c5ce24c3d09045752  sm-action-x86_64-unknown-linux-gnu     9021712  471649524  2026-07-09

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/release-receipt/v1",
+  "title": "blessed/release-receipt/v1",
+  "description": "A normalized, locally-validated record of the producer's GitHub Release. It supplies the RELEASE-PUBLICATION FACT — published_at — and provenance binding. It is NOT cryptographic authority over the candidate: candidate authenticity comes from its detached signature and its exact Release/tag binding, never from this receipt. It exists so the renderer never reads a clock and never calls the network: published_at is a stable recorded fact, produced by a credentialed fetch zone outside the pure renderer. Recreating a Release with a changed database id, tag, resolved SHA, or published_at is a CONFLICT, not a replay.",
+  "type": "object",
+  "required": ["schema", "producer_repo", "release_id", "tag", "target_sha", "draft", "prerelease", "published_at", "manifest_asset"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/release-receipt/v1" },
+    "producer_repo": { "$ref": "#/$defs/repo" },
+    "release_id": {
+      "description": "GitHub Release DATABASE identity. A deleted-and-recreated Release under the same tag has a different id, which must read as a conflict rather than a replay.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "tag": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "target_sha": { "$ref": "#/$defs/sha40" },
+    "draft": {
+      "description": "Must be false. A draft Release is not a durable candidate store.",
+      "const": false
+    },
+    "prerelease": { "const": false },
+    "published_at": {
+      "description": "CANONICAL RELEASE PUBLICATION TIME, in UTC with a literal Z. This is the ONLY source of a rendered published_at. It is deliberately NOT candidate.created_at, which DocSort derives from the source commit date: for v0.4.3 created_at is 2026-08-13T01:02:56Z (commit 86e5a3f) while the Release published at 2026-08-13T01:24:49Z. Reusing created_at would publish one fact under another fact's name.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "manifest_asset": {
+      "type": "object",
+      "required": ["name", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "const": "release-candidate.json" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "repo": { "type": "string", "pattern": "^(?=[^/]{1,39}/)[A-Za-z0-9](-?[A-Za-z0-9])*/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$" },
+    "sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

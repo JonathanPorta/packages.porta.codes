@@ -1,0 +1,83 @@
+{
+  "schema": "blessed/release-candidate/v1",
+  "project": "docsort",
+  "component": "docsort-desktop",
+  "version": "0.4.3",
+  "tag": "v0.4.3",
+  "producer_repo": "JonathanPorta/docsort",
+  "source_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+  "build_sha": "5f2b9c7d0a41e836b95c2d7e08a4f61b3c9d5e27",
+  "created_at": "2026-08-13T01:02:56Z",
+  "signing": {
+    "profile": "ed25519-detached-v1",
+    "key_id": "docsort-manifest-2026-01",
+    "manifest_signature": "release-candidate.json.sig",
+    "artifacts": "required"
+  },
+  "public_notes": {
+    "filename": "release-notes-public.md",
+    "sha256": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+  },
+  "artifacts": [
+    {
+      "id": "macos-arm64-dmg",
+      "filename": "DocSort_0.4.3_aarch64.dmg",
+      "platform": "darwin/arm64",
+      "install_kind": "dmg",
+      "size": 14830112,
+      "sha256": "11d0c5a7e3b94f2681c07a5d3e9b04f7128ca6d5e0937b4128fa5c6d0e7b3a91",
+      "signature": "DocSort_0.4.3_aarch64.dmg.sig",
+      "signature_profile": "tauri-minisign-v1",
+      "signature_key_id": "0329307E2A827219"
+    },
+    {
+      "id": "macos-arm64-updater",
+      "filename": "DocSort_0.4.3_aarch64.app.tar.gz",
+      "platform": "darwin/arm64",
+      "install_kind": "tarball",
+      "size": 13920044,
+      "sha256": "22e1d6b8f4ca503792d18b6e4fac15082239b7e6f1a48c5239eb6d7e1f8c4b02",
+      "signature": "DocSort_0.4.3_aarch64.app.tar.gz.sig",
+      "signature_profile": "tauri-minisign-v1",
+      "signature_key_id": "0329307E2A827219"
+    }
+  ],
+  "files": [
+    {
+      "name": "DocSort_0.4.3_aarch64.dmg",
+      "role": "artifact",
+      "size": 14830112,
+      "sha256": "11d0c5a7e3b94f2681c07a5d3e9b04f7128ca6d5e0937b4128fa5c6d0e7b3a91"
+    },
+    {
+      "name": "DocSort_0.4.3_aarch64.dmg.sig",
+      "role": "signature",
+      "size": 566,
+      "sha256": "aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11"
+    },
+    {
+      "name": "DocSort_0.4.3_aarch64.app.tar.gz",
+      "role": "artifact",
+      "size": 13920044,
+      "sha256": "22e1d6b8f4ca503792d18b6e4fac15082239b7e6f1a48c5239eb6d7e1f8c4b02"
+    },
+    {
+      "name": "DocSort_0.4.3_aarch64.app.tar.gz.sig",
+      "role": "signature",
+      "size": 566,
+      "sha256": "aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22aa22"
+    },
+    {
+      "name": "SHA256SUMS",
+      "role": "checksums",
+      "size": 256,
+      "sha256": "cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11cc11"
+    },
+    {
+      "name": "release-notes-public.md",
+      "role": "notes",
+      "size": 1420,
+      "sha256": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+    }
+  ]
+}

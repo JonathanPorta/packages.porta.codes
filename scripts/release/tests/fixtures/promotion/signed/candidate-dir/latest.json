@@ -1,0 +1,15 @@
+{
+  "version": "0.4.3",
+  "notes": "Pilot fixture release.",
+  "pub_date": "2026-08-13T01:02:56Z",
+  "platforms": {
+    "linux-x86_64": {
+      "signature": "aEl4MXg2QnNpT0ZiVHBIcERCaTBibVJzYlo5NDZSbWJtZXNKeHFNbGlpQjNNeCtDa0tZbU5Zdi9xUHZOaDhhRkdxWEh6OWxRR1lVRXR2SDE5Rkl1Q1E9PQ==",
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_amd64.AppImage"
+    },
+    "darwin-aarch64": {
+      "signature": "ZllISHZZWVkyWWxPSkhZQnJVMGxueEZZOUNOZUtlZWlGd0VKRUJJTlRyMitETEVJYW9BTTJYT1UzSGFZRWt3N3JVbzdNQXA0U1ZucjhVL0x2Umo2REE9PQ==",
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_aarch64.dmg"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "version": "0.4.3",
+  "notes": "# DocSort release notes\n\n## v0.4.3\n\nDocSort now checks that an update really is the version it claims to be, and\nrefuses to move backwards.\n\n### Highlights\n\n- **Updates are bound to their version.** Before downloading anything, DocSort\n  fetches the signed release record for the version being offered, checks that\n  signature against a key built into the app, and confirms the update feed it was\n  served is exactly the one that record covers. An update whose advertised version\n  does not match its signed release is refused.\n- **No downgrades.** An update is only installed when it is genuinely newer than\n  the version you are running. An offer to \"update\" to something older or\n  identical is rejected.\n\n### Correction to the v0.4.2 release notes\n\nv0.4.2 said a tampered or substituted download could not be installed. That was\nstated too broadly, and this release is what makes it accurate.\n\nv0.4.2 verified the signature of the file it downloaded, so it would not install a\nfile that was not signed by the DocSort release key. What it did not check was\nwhether the file it was offered was the file belonging to the version being\nadvertised. Anyone able to alter the update feed could have paired a high version\nnumber with an older, genuinely signed DocSort build — the signature check would\nhave passed and the older build would have installed. That is a downgrade or\nreplay, not arbitrary code: an attacker still could not have made DocSort install\nsomething the release key had never signed.\n\nNothing suggests this happened. The v0.4.2 release notes are published as a\nsigned, content-addressed file and cannot be edited after the fact, so this is\nwhere the correction lives.\n\n### Upgrade notes\n\n- If you are on v0.4.2, DocSort can install this release itself.\n- Earlier versions have no working update endpoint and need a one-time manual\n  install.\n\n### Supported platforms\n\n- macOS (Apple Silicon)\n- Windows (x86-64)\n- Linux (x86-64: AppImage, .deb)\n\nDownloads are integrity-checked: every installer's SHA-256 is listed in `SHA256SUMS`,\nand the release manifest is signed.",
+  "pub_date": "2026-08-13T01:02:56Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRWmNvSXFmakFwQTdlREdIemtMOFZaYkJRMjhic3ZjVjdQTjRkVFFzSVZJZzVBWjRzZzFiRkVVaTg4WWYwS0FIcHd4WTRualNBZ3hpc25iOFpGeXVTZDhwdVFtcU9tU1F3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTg0MTM0CWZpbGU6RG9jU29ydC5hcHAudGFyLmd6CkNvZk9nMlltd013QVZGY25nejAvNlN4ZUo4Vi8yVEJjTk5NeGswb2JvZ0pvMks3RVVhdUwyQWRLSmJLalArNURXZE9yMGR2aGZ4NFJaMFo4NUwwZENRPT0K",
+      "url": "https://www.docsort.io/downloads/docsort/releases/v0.4.3/DocSort.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRWmNvSXFmakFwQXlKblMremRESm1lUmVsWmVRZGJYemR1RlJYbkQxR1ZGOFBaQkVrSy9LR3FkUG9kQVVTVlRybjU2WVRkNS93bUQvUjYrMGpoSGZsNFB1SkU1Yy9kMFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTg0MTM1CWZpbGU6RG9jU29ydF8wLjQuM194NjQtc2V0dXAuZXhlCjRpVnU1ekYxdC9GTWlKbEpneldEd3hBSlAyWW1KOWZGbklDVFVodVl5cEhqNUJ3RFc2Wk01VVNscElrN2hwRG9GbXIrZFBHa2hpa1NMWWlGbW03a0RRPT0K",
+      "url": "https://www.docsort.io/downloads/docsort/releases/v0.4.3/DocSort_0.4.3_x64-setup.exe"
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRWmNvSXFmakFwQS9TVGRQRmxjVDAyanFrYkRGRk8zY0x5WUNPd0tOdFRMRzVaTUhEMmdNbTVZL2cwUEZoYXhaNk5pTUNqRm5EeEdPbG5mTXhFbXAzKzJnVXRmT2hlOXc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2NTg0MTM1CWZpbGU6RG9jU29ydF8wLjQuM19hbWQ2NC5BcHBJbWFnZQpOSU50WGpHSDV2VmpTOHp0WTlPbXlPMXhlUVpuMmRnT0Z0aHcyNXBXUFNtUk1FWG8vaHVmUHZSSkQ0Y2Z4VlR2VGs0a2g3L3NGdnNlTy8vZUdZUVJEUT09Cg==",
+      "url": "https://www.docsort.io/downloads/docsort/releases/v0.4.3/DocSort_0.4.3_amd64.AppImage"
+    }
+  }
+}

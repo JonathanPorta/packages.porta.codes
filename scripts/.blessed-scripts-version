@@ -1,0 +1,17 @@
+# Pinned blessed-cicd script categories for this repo (blessed-cicd scripts/INSTALL.md).
+# `make sync-scripts` installs them; `make verify-scripts` checks MANIFEST.sha256.
+BCICD_REPO_SLUG=JonathanPorta/blessed-cicd
+
+# BWS loader (sm-action-run.sh) and the authority-domain bootstrapper.
+BWS_VERSION=1.9.1
+BWS_TAG=bws-v1.9.1
+
+# rpm-finalize.sh (LP-9, used by producers) and the candidate verifier.
+# Released: signing-v0.3.0 (blessed-cicd #306).
+SIGNING_VERSION=0.3.0
+SIGNING_TAG=signing-v0.3.0
+
+# Candidate validation and the package-repository tooling (pkgrepo-*.sh).
+# Released: release-v0.5.1 (blessed-cicd #308 a250255 + #312 48b1107).
+RELEASE_VERSION=0.5.1
+RELEASE_TAG=release-v0.5.1

@@ -1,0 +1,239 @@
+# blessed/repo/v1
+# Repo-local manifest: what this repository is, which standards it has ADOPTED,
+# and — authoritatively — which authority domains exist and what each may read
+# or assume (secrets.bwsm-authority-domains@1).
+
+schema: blessed/repo/v1
+
+project: packages
+component: package-repository-surface
+repo_type: static-site
+stage: prototype
+
+stack:
+  - terraform
+  - aws-s3
+  - cloudflare
+  - cloudflare-workers
+  - github-actions
+
+standards:
+  # Only standards whose requirements this repository meets today. `make help`
+  # exposes every makefile.core@1 target and the static-site profile verbs.
+  - makefile.core@1
+  - makefile.profiles@1
+  # NOT declared yet — each needs evidence this repository does not have until
+  # provisioning and the first publication (PROVISIONING.md, APPROVAL.md):
+  #   secrets.bwsm-authority-domains@1   declarations, the one profile-aware
+  #                                      loader and the live Environment policies
+  #                                      exist; the BWS projects, machine
+  #                                      accounts and access proofs do not yet.
+  #   releases.surfaces@1, releases.package-repositories@1
+  #                                      declared surface and tooling exist; no
+  #                                      publication, read-back or replay yet.
+
+capabilities:
+  - bwsm
+  - blessed-scripts
+  - sha-pinning
+  - repo-protection
+  - ai-rules-subtree
+  - static-site-terraform
+  - github-oidc-aws
+
+secret_authorities:
+  # AWS AUTHORITY IS OIDC-ONLY (blessed-cicd #9): no AWS access key exists for
+  # this repository in BWS, GitHub or anywhere else. The three AWS domains below
+  # are GitHub OIDC role sessions; the roles, their trust and their permissions
+  # boundaries are bootstrap-owned (scripts/provision/aws-oidc-bootstrap.sh,
+  # operator SSO; #239) and Terraform only adopts them.
+  #
+  # The OIDC subject is IMMUTABLE-ID based: this repository's live subject
+  # configuration is use_default=true, use_immutable_subject=true, prefix
+  # repo:JonathanPorta@1451007/packages.porta.codes@1389054623
+  # (policies/oidc-subject.json; the bootstrap fails closed if it changes).
+
+  default:
+    authority_type: bwsm
+    github_scope: repository
+    github_secret: BWS_ACCESS_TOKEN
+    bwsm_project: packages-porta-codes
+    machine_account: packages-porta-codes-ci
+    # CLOSED SET: its own project plus the reviewed shared project that holds
+    # CLOUDFLARE_ACCOUNT_ID (`shared` in .bws-secrets-list).
+    bwsm_allowed_projects:
+      - packages-porta-codes
+      - _shared-ci
+    # Cloudflare ONLY (Terraform and edge verification). No AWS key; no
+    # monitoring token (monitoring is off).
+    injects:
+      - CLOUDFLARE_ACCOUNT_ID
+      - CLOUDFLARE_API_TOKEN
+
+  infrastructure-plan:
+    authority_type: oidc
+    github_scope: environment
+    github_environment: infrastructure-plan
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    oidc:
+      audience: sts.amazonaws.com
+      subject: repo:JonathanPorta@1451007/packages.porta.codes@1389054623:environment:infrastructure-plan
+      target_role: arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-terraform-plan
+    # READ-ONLY: this stack's state object and the bucket's configuration and
+    # site object; reads of the adopted provider and roles. No write, no lock.
+    permits:
+      policy: policies/packages-porta-codes-terraform-plan.json
+      actions:
+        - s3:ListBucket
+        - s3:GetObject
+        - s3:Get*
+        - s3:List*
+        - s3:GetObjectAcl
+        - s3:GetObjectTagging
+        - s3:GetObjectVersion
+        - iam:GetOpenIDConnectProvider
+        - iam:GetRole
+        - iam:GetRolePolicy
+        - iam:ListRolePolicies
+        - iam:ListAttachedRolePolicies
+      resources:
+        - arn:aws:s3:::deployments-state/terraform-state/packages.porta.codes
+        - arn:aws:s3:::packages.porta.codes
+        - arn:aws:s3:::packages.porta.codes/index.html
+        - arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com
+        - arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-publisher
+        - arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-terraform-plan
+        - arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-terraform-apply
+
+  infrastructure:
+    authority_type: oidc
+    github_scope: environment
+    github_environment: infrastructure
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    oidc:
+      audience: sts.amazonaws.com
+      subject: repo:JonathanPorta@1451007/packages.porta.codes@1389054623:environment:infrastructure
+      target_role: arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-terraform-apply
+    # This stack only: state + lock, the bucket's configuration (no DeleteBucket),
+    # the site object index.html (never a published package), and the
+    # publisher role's INLINE policy only. No CreateRole, trust, boundary or
+    # attachment change; no iam:PassRole; no sts chaining.
+    permits:
+      policy: policies/packages-porta-codes-terraform-apply.json
+      actions:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:DeleteObject
+        - s3:Get*
+        - s3:List*
+        - s3:CreateBucket
+        - s3:PutBucketTagging
+        - s3:PutBucketOwnershipControls
+        - s3:PutBucketPublicAccessBlock
+        - s3:PutBucketAcl
+        - s3:PutBucketPolicy
+        - s3:PutBucketVersioning
+        - s3:PutBucketWebsite
+        - s3:DeleteBucketWebsite
+        - s3:PutObjectAcl
+        - iam:GetOpenIDConnectProvider
+        - iam:GetRole
+        - iam:ListRolePolicies
+        - iam:ListAttachedRolePolicies
+        - iam:GetRolePolicy
+        - iam:PutRolePolicy
+        - iam:DeleteRolePolicy
+      resources:
+        - arn:aws:s3:::deployments-state/terraform-state/packages.porta.codes
+        - arn:aws:s3:::deployments-state/terraform-state/packages.porta.codes.tflock
+        - arn:aws:s3:::packages.porta.codes
+        - arn:aws:s3:::packages.porta.codes/index.html
+        - arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com
+        - arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-publisher
+
+  candidate-ingest:
+    authority_type: bwsm
+    github_scope: environment
+    github_environment: candidate-ingest
+    github_secret: BWS_ACCESS_TOKEN
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    bwsm_project: packages-porta-codes-candidate-ingest
+    # CLOSED SET — exactly one project.
+    bwsm_allowed_projects:
+      - packages-porta-codes-candidate-ingest
+    machine_account: packages-porta-codes-candidate-ingest-ci
+    # Fine-grained PAT: Contents read-only on JonathanPorta/kioskd, corpus,
+    # keysprout; nothing else (APPROVAL.md §4).
+    injects:
+      - PACKAGES_CANDIDATE_READ_TOKEN
+    # RECEIVER: admission and publication run trusted code from `main`, like
+    # docsort.io's candidate-ingest. Main-only is the exact allowed ref.
+
+  repository-signing:
+    authority_type: bwsm
+    github_scope: environment
+    github_environment: repository-signing
+    github_secret: BWS_ACCESS_TOKEN
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    bwsm_project: packages-porta-codes-repo-signing
+    bwsm_allowed_projects:
+      - packages-porta-codes-repo-signing
+    machine_account: packages-porta-codes-repo-signing-ci
+    # The ARMORED OpenPGP repository key (RSA 4096). The sign job receives only
+    # this; it has no contents: write, no candidate token and no AWS identity.
+    injects:
+      - PACKAGES_REPO_SIGNING_KEY
+
+  repository-publication:
+    authority_type: oidc
+    github_scope: environment
+    github_environment: repository-publication
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    oidc:
+      audience: sts.amazonaws.com
+      subject: repo:JonathanPorta@1451007/packages.porta.codes@1389054623:environment:repository-publication
+      # Bootstrap-owned (trust + boundary policies/packages-porta-codes-publisher-boundary.json);
+      # Terraform owns only its inline policy (main.tf aws_iam_role_policy.publisher).
+      target_role: arn:aws:iam::<AWS_ACCOUNT_ID>:role/packages-porta-codes-publisher
+    permits:
+      # s3:ListBucket only distinguishes a missing object from a forbidden one.
+      # The bucket policy additionally forces If-None-Match on every object but
+      # the pointer, If-Match/If-None-Match on the pointer, and denies deletes.
+      actions:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:ListBucket
+      resources:
+        - arn:aws:s3:::packages.porta.codes
+        - arn:aws:s3:::packages.porta.codes/*
+
+tracked_dependencies:
+  ai_rules:
+    origin: https://github.com/JonathanPorta/ai-rules
+    subtree_split: 3d9610b90cc7c0d1b6dfe58bd8e68bb544df93f7
+  blessed_scripts:
+    bws: 1.9.1
+    signing: 0.3.0
+    release: 0.5.1
+
+waivers: []
+
+notes: |
+  The signed static APT/DNF repositories for kioskd, corpus and keysprout
+  (blessed-cicd #303, #74, #81). The approved design and its owner decisions
+  are in APPROVAL.md; the credential walkthrough is PROVISIONING.md.

@@ -1,0 +1,20 @@
+{
+  "schema": "blessed/release-candidate-ready/v1",
+  "candidate": {
+    "project": "pilot",
+    "component": "pilot-desktop",
+    "version": "0.4.3",
+    "tag": "v0.4.3",
+    "producer_repo": "JonathanPorta/pilot",
+    "producer_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+    "manifest_url": "https://api.github.com/repos/JonathanPorta/pilot/releases/assets/1",
+    "manifest_sha256": "7d619c94ef491a71ee5420ccffc924edee8bf365f07e3b953fb8cf48a8e06dba"
+  },
+  "promotion": {
+    "surface_id": "public-downloads",
+    "surface_kind": "public-download-surface",
+    "surface_repo": "JonathanPorta/pilot.example",
+    "channel": "stable",
+    "kind": "channel-pointer-pr"
+  }
+}

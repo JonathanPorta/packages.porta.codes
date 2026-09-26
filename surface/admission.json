@@ -1,0 +1,30 @@
+{
+  "schema": "packages-porta-codes/admission-policy/v1",
+  "comment": "Per producer: the committed candidate trust store (the trust root never travels with the candidate), the package names it may publish, and the functional check run after every install and upgrade by scripts/surface/client-rows.sh (systemd: the package needs a booted systemd). Architectures without a repository in the inventory (the support matrix) are not admitted.",
+  "producers": {
+    "JonathanPorta/kioskd": {
+      "trust_store": "keys/candidates/kioskd.json",
+      "package_names": [
+        "kioskitd"
+      ],
+      "smoke": "kioskitd version",
+      "systemd": true
+    },
+    "JonathanPorta/corpus": {
+      "trust_store": "keys/candidates/corpus.json",
+      "package_names": [
+        "corpus-cx"
+      ],
+      "smoke": "cx version",
+      "systemd": false
+    },
+    "JonathanPorta/keysprout": {
+      "trust_store": "keys/candidates/keysprout.json",
+      "package_names": [
+        "keysprout-keyboard"
+      ],
+      "smoke": "rpm -V keysprout-keyboard",
+      "systemd": false
+    }
+  }
+}

@@ -1,0 +1,21 @@
+# blessed/release-surfaces/v1 — the signed static APT/DNF repository surface
+# (blessed releases.package-repositories@1). This repository is the ONE owner of
+# the packages.porta.codes bucket, CDN hostname and repository signing key.
+# Producers keep their candidates; this repo admits them by surface-pull into a
+# reviewed inventory and publishes with its own authority.
+schema: blessed/release-surfaces/v1
+product: portfolio-linux-packages
+surfaces:
+  - id: packages
+    kind: package-repository-surface
+    owner_repo: JonathanPorta/packages.porta.codes
+    producer_repos:
+      - JonathanPorta/kioskd
+      - JonathanPorta/corpus
+      - JonathanPorta/keysprout
+    consumer_contract: [apt-signed-by, dnf-gpgcheck-repo-gpgcheck]
+    access_model: public-anonymous
+    publisher_model: surface-pull
+    promotion_transport: workflow_dispatch
+    public_base_url: https://packages.porta.codes/
+    package_formats: [apt, dnf]

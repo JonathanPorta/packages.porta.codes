@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JonathanPorta/blessed-cicd/standards/releases/references/package-repository-inventory.schema.json",
+  "title": "blessed/package-repository-inventory/v1",
+  "description": "The reviewed, authoritative state of one package-repository-surface (releases.package-repositories@1 PR-3). Metadata is generated from this document alone. Each REPOSITORY carries the publication identity — product, producer, channel, format, architecture(s) and the distro releases it is approved for — and each PACKAGE names exactly one repository, from which its product, channel and targets derive. Relational rules (unique ids and paths, one repository per product/format/channel/architecture, producer and architecture agreement, declared signers) are enforced by scripts/release/validate-package-inventory.sh.",
+  "type": "object",
+  "required": [
+    "schema",
+    "surface_id",
+    "public_base_url",
+    "repository_key",
+    "producer_keys",
+    "repositories",
+    "packages"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "blessed/package-repository-inventory/v1"
+    },
+    "surface_id": {
+      "$ref": "#/$defs/token"
+    },
+    "public_base_url": {
+      "description": "Must equal the surface's public_base_url in release-surfaces.yaml.",
+      "type": "string",
+      "pattern": "^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*/([A-Za-z0-9_][A-Za-z0-9._-]*/)*$"
+    },
+    "repository_key": {
+      "description": "The repository metadata signing key (PR-5). Its own credential domain; never a producer key.",
+      "type": "object",
+      "required": [
+        "fingerprint",
+        "public_key_path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "public_key_path": {
+          "$ref": "#/$defs/relPath"
+        }
+      }
+    },
+    "producer_keys": {
+      "description": "Native RPM package signers admitted on this surface, by producer repo (PR-2; linux-packaging LP-9). May be empty for an APT-only surface.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "producer_repo",
+          "fingerprint",
+          "public_key_path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "producer_repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "fingerprint": {
+            "$ref": "#/$defs/fingerprint"
+          },
+          "public_key_path": {
+            "$ref": "#/$defs/relPath"
+          }
+        }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "description": "One repository: its publication identity (product, producer, channel, approved targets) plus format-specific fields. APT: one suite with one component and a set of architectures. DNF: one single-architecture repodata tree. Branches are selected by `format` with if/then, not oneOf, so a rejection names the field at fault.",
+        "required": [
+          "id",
+          "format",
+          "path",
+          "product",
+          "producer_repo",
+          "channel",
+          "targets"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/token"
+          },
+          "format": {
+            "enum": [
+              "apt",
+              "dnf"
+            ]
+          },
+          "path": {
+            "$ref": "#/$defs/relDir"
+          },
+          "product": {
+            "$ref": "#/$defs/token"
+          },
+          "producer_repo": {
+            "$ref": "#/$defs/repo"
+          },
+          "channel": {
+            "$ref": "#/$defs/token"
+          },
+          "targets": {
+            "$ref": "#/$defs/targets"
+          },
+          "suite": {
+            "$ref": "#/$defs/token"
+          },
+          "component": {
+            "$ref": "#/$defs/token"
+          },
+          "architectures": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "amd64",
+                "arm64"
+              ]
+            }
+          },
+          "arch": {
+            "enum": [
+              "x86_64",
+              "aarch64"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "type": "object",
+              "required": [
+                "format"
+              ],
+              "properties": {
+                "format": {
+                  "const": "apt"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "suite",
+                "component",
+                "architectures"
+              ],
+              "not": {
+                "required": [
+                  "arch"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "required": [
+                "format"
+              ],
+              "properties": {
+                "format": {
+                  "const": "dnf"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "arch"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "suite"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "component"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "architectures"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "packages": {
+      "description": "Every package the surface serves, retained versions included. Never empty: an empty inventory is refused, not published (PR-14).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "repository",
+          "candidate",
+          "name",
+          "version",
+          "revision",
+          "arch",
+          "file",
+          "sha256",
+          "size"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "repository": {
+            "$ref": "#/$defs/token"
+          },
+          "candidate": {
+            "type": "object",
+            "required": [
+              "producer_repo",
+              "tag",
+              "manifest_sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "producer_repo": {
+                "$ref": "#/$defs/repo"
+              },
+              "tag": {
+                "type": "string",
+                "pattern": "^v[0-9A-Za-z.+~-]+$"
+              },
+              "manifest_sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9+.-]*$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9][0-9A-Za-z.+~]*$"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[0-9][0-9A-Za-z.+~]*$"
+          },
+          "arch": {
+            "enum": [
+              "amd64",
+              "arm64",
+              "all",
+              "x86_64",
+              "aarch64",
+              "noarch"
+            ]
+          },
+          "file": {
+            "$ref": "#/$defs/relPath"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "signer_fingerprint": {
+            "$ref": "#/$defs/fingerprint"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "token": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{40}$"
+    },
+    "relDir": {
+      "type": "string",
+      "pattern": "^([A-Za-z0-9_][A-Za-z0-9._-]*/)+$"
+    },
+    "relPath": {
+      "type": "string",
+      "pattern": "^([A-Za-z0-9_][A-Za-z0-9._-]*/)*[A-Za-z0-9_][A-Za-z0-9._+~-]*$"
+    },
+    "targets": {
+      "description": "The distro releases this repository is approved for (linux-packaging LP-1). Named releases only — never 'all Fedora'.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "distro",
+          "release"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "distro": {
+            "enum": [
+              "debian",
+              "ubuntu",
+              "raspberry-pi-os",
+              "fedora"
+            ]
+          },
+          "release": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          }
+        }
+      }
+    }
+  }
+}

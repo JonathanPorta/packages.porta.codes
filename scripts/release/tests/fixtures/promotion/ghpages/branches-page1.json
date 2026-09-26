@@ -1,0 +1,4 @@
+[
+  { "name": "main", "commit": { "sha": "1111111111111111111111111111111111111111" } },
+  { "name": "promote/public-downloads/stable/0.4.3", "commit": { "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+]

@@ -1,0 +1,13 @@
+{
+  "build_sha": "5f2b9c7d0a41e836b95c2d7e08a4f61b3c9d5e27",
+  "builder": "fixture",
+  "component": "pilot-desktop",
+  "created_at": "2026-08-13T01:02:56Z",
+  "producer_repo": "JonathanPorta/pilot",
+  "project": "pilot",
+  "schema": "blessed/release-provenance/v1",
+  "source_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+  "tag": "v0.4.3",
+  "tool": "release/0.3.0",
+  "version": "0.4.3"
+}

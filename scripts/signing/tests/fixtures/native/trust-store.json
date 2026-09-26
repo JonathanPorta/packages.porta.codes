@@ -1,0 +1,11 @@
+{
+  "schema": "blessed/signing-trust-store/v1",
+  "keys": {
+    "0329307E2A827219": {
+      "profile": "tauri-minisign-v1",
+      "public_key_base64": "u61rs5pBdivDtdKKa4rg2e1ImjbBr88sTejFk4sCqrI=",
+      "status": "active",
+      "comment": "DocSort Tauri updater key, production v0.4.3 vector"
+    }
+  }
+}

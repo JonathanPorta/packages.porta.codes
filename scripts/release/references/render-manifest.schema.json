@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/render-manifest/v1",
+  "title": "blessed/render-manifest/v1",
+  "description": "Exactly what a render produced: which bundle it came from, which paths it wrote, and the size and digest of each. Like the admitted bundle, this is NOT a credential — apply never trusts it. Apply re-verifies the bundle, INDEPENDENTLY RE-RENDERS into temporary space, and compares both this manifest and every output byte before touching the repository. That is what makes a hand-edited rendered file uncommittable: the bytes on disk must equal bytes apply derived itself from verified inputs. The output list is closed, so an extra file cannot ride along.",
+  "type": "object",
+  "required": ["schema", "admission_id", "selected", "outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/render-manifest/v1" },
+    "admission_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "selected": {
+      "type": "object",
+      "required": ["surface_id", "channel"],
+      "additionalProperties": false,
+      "properties": {
+        "surface_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "channel": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["role", "repo_path", "size", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "role": { "enum": ["channel-pointer", "downloads-index", "updater-pointer"] },
+          "repo_path": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._][A-Za-z0-9._/-]*$" },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

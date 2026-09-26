@@ -1,0 +1,65 @@
+{
+  "schema": "blessed/publication-attestation/v1",
+  "candidate_sha256": "df8deef54212df13c036ddbd7ab40dd44df3c9a8c14f3125af2de2469922aca9",
+  "surface_id": "public-downloads",
+  "channel": "stable",
+  "immutable_prefix_url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/",
+  "complete": true,
+  "objects": [
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/SHA256SUMS",
+      "sha256": "6540a3a48fa2434048b8882c2acb1d1c79aac7d6459dc7c68a0ca7730aa5077b",
+      "size": 706
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/latest.json",
+      "sha256": "710d2704559f1c5bb19e29a1d5b4da792af8ecbbb91adbef5a188c1200b27ba0",
+      "size": 664
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/latest.json.sig",
+      "sha256": "0716c223d3e0640bba07d71973fc69ac465ad7899337034d90623b144ecdb15d",
+      "size": 88
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_aarch64.dmg",
+      "sha256": "db61aded55aa5097aaba03ae1ac373bcae2a7e57545d9f74ea6a90e31448e409",
+      "size": 20
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_aarch64.dmg.sig",
+      "sha256": "3ad428152e63e63a6daf7c2533dc6ba68ac0074e105a1b4d0f1d7388fae09c4c",
+      "size": 88
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_amd64.AppImage",
+      "sha256": "8015b22e26404d2de38483d7bfce58978bec6e9620b6cadf3464f4a018d1ae3f",
+      "size": 20
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/pilot_0.4.3_amd64.AppImage.sig",
+      "sha256": "32225d4c8f79c5fd2ed41541152d88ebd94d2087dd6861af805584c91ff86a31",
+      "size": 88
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/provenance.json",
+      "sha256": "f11503a03bc2dfb90b004c2418ee8e5e30602972e13d415a2017db9b607c7dbf",
+      "size": 395
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/release-notes-public.md",
+      "sha256": "790b8d597d4d99f0b088bbf850acb238196478e153e6ce3581e7d1f40f0a2197",
+      "size": 37
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/manifest.json",
+      "sha256": "df8deef54212df13c036ddbd7ab40dd44df3c9a8c14f3125af2de2469922aca9",
+      "size": 3205
+    },
+    {
+      "url": "https://www.pilot.example/downloads/pilot/releases/v0.4.3/manifest.json.sig",
+      "sha256": "5618a8205b0cfe756dc3c1a2a8bd91e6eea4e2c9098e38f1d74c742f3dc91577",
+      "size": 88
+    }
+  ]
+}

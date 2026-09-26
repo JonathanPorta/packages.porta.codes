@@ -1,0 +1,140 @@
+name: 🚀 Terraform apply
+
+# Applies EXACTLY one reviewed saved plan (blessed-cicd #9). Dispatched on
+# `main` with the run id of a Terraform plan run the owner reviewed. It refuses
+# unless that run is terraform-plan.yml, dispatched on main, successful, made
+# from the SHA `main` is at NOW, and its plan file is the one the run recorded.
+# It then assumes packages-porta-codes-terraform-apply (Environment
+# infrastructure, branch main) and runs `terraform apply` on that saved plan —
+# which Terraform itself refuses if the state changed since the plan.
+on:
+  workflow_dispatch:
+    inputs:
+      plan_run_id:
+        description: 'Run id of the reviewed "Terraform plan" run'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "apply" to apply that plan'
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: 🚀 apply the reviewed plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: infrastructure
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: 🔒 main only, confirmed, one plan run
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          PLAN_RUN: ${{ inputs.plan_run_id }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::apply runs from main only"; exit 1; }
+          [ "$CONFIRM" = apply ] || { echo "::error::confirm must be exactly 'apply'"; exit 1; }
+          case "$PLAN_RUN" in "" | *[!0-9]*) echo "::error::plan_run_id must be a run id"; exit 1 ;; esac
+
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: 🔎 The plan run is a reviewed plan of main's current HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAN_RUN: ${{ inputs.plan_run_id }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [ "$head" = "$GITHUB_SHA" ] || { echo "::error::main moved to $head since this dispatch ($GITHUB_SHA); plan and apply again"; exit 1; }
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PLAN_RUN")"
+          jq -e --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .path == ".github/workflows/terraform-plan.yml" and .event == "workflow_dispatch"
+            and .head_branch == "main" and .head_sha == $sha and .status == "completed"
+            and .conclusion == "success" and .repository.full_name == $repo' <<<"$run" >/dev/null || {
+            echo "::error::run $PLAN_RUN is not a successful Terraform plan of main at $GITHUB_SHA:"
+            jq '{path, event, head_branch, head_sha, status, conclusion}' <<<"$run"; exit 1; }
+          echo "plan run $PLAN_RUN: terraform-plan.yml on main at $GITHUB_SHA, success"
+
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: terraform-plan
+          run-id: ${{ inputs.plan_run_id }}
+          github-token: ${{ github.token }}
+          path: reviewed-plan
+
+      - name: 🔗 The artifact is that run's plan of this source
+        env:
+          PLAN_RUN: ${{ inputs.plan_run_id }}
+        run: |
+          set -euo pipefail
+          m=reviewed-plan/plan.meta.json
+          jq -e --arg sha "$GITHUB_SHA" --arg run "$PLAN_RUN" \
+            --arg lock "$(sha256sum .terraform.lock.hcl | cut -d' ' -f1)" \
+            --arg plan "$(sha256sum reviewed-plan/plan.tmp | cut -d' ' -f1)" '
+            .schema == "packages.porta.codes/terraform-plan/v1" and .source_sha == $sha
+            and .run_id == $run and .lock_sha256 == $lock and .plan_sha256 == $plan' "$m" >/dev/null || {
+            echo "::error::the downloaded plan does not match its run, this source or its recorded digest"; cat "$m"; exit 1; }
+          cp reviewed-plan/plan.tmp plan.tmp
+          grep -E '^(Plan:|No changes\.)' reviewed-plan/plan.out || true
+
+      - name: 🔐 Load the Cloudflare credentials (default domain)
+        uses: ./.github/actions/load-secrets
+        with:
+          profile: default
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+
+      - name: 🧹 No ambient AWS credentials
+        run: |
+          set -euo pipefail
+          if env | grep -Eq '^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY|SESSION_TOKEN)='; then
+            echo "::error::static AWS credentials are present before OIDC; refusing"; exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/packages-porta-codes-terraform-apply
+          role-session-name: ppc-apply-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: 🪪 The session is the apply role in the expected account
+        env:
+          EXPECTED_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          id="$(aws sts get-caller-identity --output json)"
+          [ "$(jq -r .Account <<<"$id")" = "$EXPECTED_ACCOUNT" ] || { echo "::error::unexpected account"; exit 1; }
+          case "$(jq -r .Arn <<<"$id")" in
+            "arn:aws:sts::$EXPECTED_ACCOUNT:assumed-role/packages-porta-codes-terraform-apply/"*) echo "assumed $(jq -r .Arn <<<"$id")" ;;
+            *) echo "::error::unexpected role $(jq -r .Arn <<<"$id")"; exit 1 ;;
+          esac
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: 🚀 Apply exactly the reviewed plan
+        run: make deploy
+
+      - name: 📝 Summary
+        if: always()
+        env:
+          PLAN_RUN: ${{ inputs.plan_run_id }}
+        run: |
+          {
+            echo "## Terraform apply — source \`$GITHUB_SHA\`, plan run \`$PLAN_RUN\`"
+            grep -E '^(Plan:|No changes\.)' reviewed-plan/plan.out 2>/dev/null || true
+          } >>"$GITHUB_STEP_SUMMARY"

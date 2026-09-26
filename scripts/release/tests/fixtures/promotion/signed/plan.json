@@ -1,0 +1,37 @@
+{
+  "schema": "blessed/release-candidate-plan/v1",
+  "project": "pilot",
+  "component": "pilot-desktop",
+  "version": "0.4.3",
+  "tag": "v0.4.3",
+  "producer_repo": "JonathanPorta/pilot",
+  "source_sha": "86e5a3f4c1d29b077e5518a3d0c46f9b2a7e1d84",
+  "build_sha": "5f2b9c7d0a41e836b95c2d7e08a4f61b3c9d5e27",
+  "created_at": "2026-08-13T01:02:56Z",
+  "signing": {
+    "profile": "ed25519-detached-v1",
+    "key_id": "pilot-fixture-2026-08",
+    "artifacts": "required"
+  },
+  "public_notes": "release-notes-public.md",
+  "artifacts": [
+    {
+      "id": "linux-appimage",
+      "filename": "pilot_0.4.3_amd64.AppImage",
+      "platform": "linux/amd64",
+      "install_kind": "appimage"
+    },
+    {
+      "id": "macos-dmg",
+      "filename": "pilot_0.4.3_aarch64.dmg",
+      "platform": "darwin/arm64",
+      "install_kind": "dmg"
+    },
+    {
+      "id": "updater-feed",
+      "filename": "latest.json",
+      "platform": "any",
+      "install_kind": "other"
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+name: 'Load Secrets'
+description: 'Load ONE authority domain''s secrets from Bitwarden Secrets Manager into the job env.'
+
+# The ONE profile-aware loader of this repository
+# (secrets.bwsm-authority-domains@1). Every BWS UUID lives in this file; a job
+# selects its authority domain with `profile`, and its GitHub Environment
+# supplies that domain's read-only machine-account token as BWS_ACCESS_TOKEN.
+# The loader profile is only an injection filter — the boundary is that each
+# machine account can read exactly one BWS project (blessed.yml
+# secret_authorities).
+#
+# UUIDs are GENERATOR-OWNED: `make bws-bootstrap ARGS="--app-name <project>
+# --secrets-list .bws/<domain>.list --project-id-file .bws/<domain>.env
+# --gh-environments <domain>"` fills exactly that domain's `<UUID> > <KEY>`
+# lines below (PROVISIONING.md). The all-zero UUIDs are placeholders; the
+# workflows refuse to run while their domain's line still holds one.
+#
+# `default` is the ordinary domain (repository-level BWS_ACCESS_TOKEN, BWS
+# project packages-porta-codes): Cloudflare ONLY, for Terraform and edge
+# verification. It holds NO AWS credential — every AWS call is a GitHub OIDC
+# role session (blessed-cicd #9). Any unknown or empty profile FAILS CLOSED.
+# The `secrets:` blocks are parsed line by line as `<UUID> > <ENV_VAR>` — no
+# comments inside them.
+
+inputs:
+  profile:
+    description: >-
+      Which authority domain to load. Exactly one:
+        default             Cloudflare only (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN)
+        candidate-ingest    the producer candidate read token (PACKAGES_CANDIDATE_READ_TOKEN)
+        repository-signing  the repository metadata signing key (PACKAGES_REPO_SIGNING_KEY)
+      Anything else FAILS CLOSED.
+    required: false
+    default: default
+  access_token:
+    description: 'The selected domain''s machine-account token (secrets.BWS_ACCESS_TOKEN from the job''s Environment).'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    # FIRST: reject an unknown profile before any secret is requested.
+    - name: '🚦 Validate the requested profile'
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        case "$PROFILE" in
+          default | candidate-ingest | repository-signing) : ;;
+          *)
+            echo "::error::load-secrets: unknown profile '$PROFILE' (expected: default | candidate-ingest | repository-signing)"
+            exit 1
+            ;;
+        esac
+        echo "load-secrets profile: $PROFILE"
+
+    # ── profile: default ── BWS project packages-porta-codes (+ the shared
+    # _shared-ci for CLOUDFLARE_ACCOUNT_ID), machine account
+    # packages-porta-codes-ci, repository-level BWS_ACCESS_TOKEN. Cloudflare only.
+    # CLOUDFLARE_ACCOUNT_ID is `shared`: its UUID is the canonical _shared-ci one
+    # baked in here (bws bootstrap.sh shared_uuid_for, the same id every static
+    # site's loader carries); the bootstrap never rewrites shared lines.
+    - name: '🔐 Load the default (Cloudflare) secrets'
+      if: ${{ inputs.profile == 'default' }}
+      shell: bash
+      env:
+        INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
+        INPUT_SECRETS: |
+          6c68ee9e-c577-44c5-a5e6-b458007ddc2a > CLOUDFLARE_ACCOUNT_ID
+          00000000-0000-0000-0000-000000000000 > CLOUDFLARE_API_TOKEN
+      run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
+
+    # ── profile: candidate-ingest ── BWS project packages-porta-codes-candidate-ingest,
+    # machine account packages-porta-codes-candidate-ingest-ci, Environment
+    # candidate-ingest (branch main).
+    - name: '🔐 Load the candidate-ingest secret'
+      if: ${{ inputs.profile == 'candidate-ingest' }}
+      shell: bash
+      env:
+        INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
+        INPUT_SECRETS: |
+          00000000-0000-0000-0000-000000000000 > PACKAGES_CANDIDATE_READ_TOKEN
+      run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
+
+    # ── profile: repository-signing ── BWS project packages-porta-codes-repo-signing,
+    # machine account packages-porta-codes-repo-signing-ci, Environment
+    # repository-signing (branch main).
+    - name: '🔐 Load the repository-signing secret'
+      if: ${{ inputs.profile == 'repository-signing' }}
+      shell: bash
+      env:
+        INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
+        INPUT_SECRETS: |
+          00000000-0000-0000-0000-000000000000 > PACKAGES_REPO_SIGNING_KEY
+      run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"

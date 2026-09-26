@@ -1,0 +1,11 @@
+{
+  "schema": "blessed/signing-trust-store/v1",
+  "keys": {
+    "0807060504030201": {
+      "profile": "tauri-minisign-v1",
+      "public_key_base64": "EOixxXQrLLwaJYZXN53SuAZ490XfuFdDDgrFCYz288M=",
+      "status": "active",
+      "comment": "synthetic tauri-minisign-v1 known-answer vector"
+    }
+  }
+}

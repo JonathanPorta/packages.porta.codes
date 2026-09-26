@@ -1,0 +1,10 @@
+{
+  "schema": "blessed/signing-trust-store/v1",
+  "keys": {
+    "pilot-fixture-2026-08": {
+      "profile": "ed25519-detached-v1",
+      "public_key_base64": "Kg7Chd+JCGyfjMgDyWWw6RMgMmmPcWoG4LGX0et1qE4=",
+      "status": "active"
+    }
+  }
+}

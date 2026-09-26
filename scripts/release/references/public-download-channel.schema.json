@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/public-download-channel/v1",
+  "title": "blessed/public-download-channel/v1",
+  "description": "The mutable live pointer for one channel of one public download surface. This schema describes the format ALREADY PUBLISHED at docsort.io; it was not designed here. It is deliberately minimal — it names the version and where to find that release's signed manifest, and nothing else. It carries no artifact list, because a consumer that needs artifacts follows manifest_url to the immutable signed manifest, and duplicating them into a mutable pointer creates a second, editable copy of facts the signature already covers. Presentation belongs to the downloads index. Every field derives from the candidate, the surface declaration, and the Release receipt, so this renderer needs no policy.",
+  "type": "object",
+  "required": ["channel", "manifest_url", "project", "published_at", "schema", "tag", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/public-download-channel/v1" },
+    "project": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "channel": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "tag": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "published_at": {
+      "description": "Release publication time, carried verbatim from the Release receipt. NOT the candidate's created_at, which records when the candidate was built from its source commit; for DocSort v0.4.3 the two are 23 minutes apart.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "manifest_url": {
+      "description": "Absolute HTTPS URL of the immutable SURFACE manifest for this release: manifest.json at the immutable prefix, schema blessed/public-download-manifest/v1, authored by the surface owner. It is NOT a rename of the candidate's release-candidate.json — this description previously said it was, which no published surface has ever matched: the producer's signed envelope stays published under its own name with its original release-candidate.json.sig, and the surface manifest is the projection that adds the canonical public URLs, surface id and channel context the producer cannot know. The two documents have distinct roles and remain distinct. The surface manifest is not itself signed; a consumer's assurance comes from the applier having bound it to the signature-verified candidate and to the publication evidence before this pointer was allowed to advance (owner decision, 2026-09-19).",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[^?#]*/manifest\\.json$"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "channel": "stable",
+  "manifest_url": "https://www.docsort.io/downloads/docsort/releases/v0.4.3/manifest.json",
+  "project": "docsort",
+  "published_at": "2026-08-13T01:24:49Z",
+  "schema": "blessed/public-download-channel/v1",
+  "tag": "v0.4.3",
+  "version": "0.4.3"
+}

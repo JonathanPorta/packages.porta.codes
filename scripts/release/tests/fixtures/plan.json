@@ -1,0 +1,18 @@
+{
+  "schema": "blessed/release-candidate-plan/v1",
+  "project": "docsort",
+  "component": "desktop-app",
+  "version": "0.4.1",
+  "tag": "v0.4.1",
+  "producer_repo": "JonathanPorta/docsort",
+  "source_sha": "1111111111111111111111111111111111111111",
+  "build_sha": "2222222222222222222222222222222222222222",
+  "created_at": "2026-07-19T18:00:00Z",
+  "signing": { "profile": "ed25519-detached-v1", "key_id": "docsort-2026-01", "artifacts": "optional" },
+  "public_notes": "release-notes-public.md",
+  "artifacts": [
+    { "id": "windows-x86_64-nsis", "filename": "DocSort_0.4.1_x64-setup.exe", "platform": "windows/x86_64", "install_kind": "exe", "sbom": "DocSort_0.4.1_x64-setup.exe.cdx.json" },
+    { "id": "macos-universal-dmg", "filename": "DocSort_0.4.1_universal.dmg", "platform": "darwin/universal", "install_kind": "dmg", "sbom": "DocSort_0.4.1_universal.dmg.cdx.json" },
+    { "id": "linux-x86_64-appimage", "filename": "DocSort_0.4.1_amd64.AppImage", "platform": "linux/x86_64", "install_kind": "appimage", "sbom": "DocSort_0.4.1_amd64.AppImage.cdx.json" }
+  ]
+}

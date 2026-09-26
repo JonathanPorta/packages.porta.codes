@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blessed-cicd/schemas/release-surfaces/v1",
+  "title": "blessed/release-surfaces/v1",
+  "description": "Repo-local release-surface declaration (releases.surfaces@1). The FIRST executable canonical definition of this proposal-status contract. Structural and per-kind rules live here; relational rules (document-wide uniqueness, cross-repo authority, URL containment, kind x publisher x transport compatibility, case-insensitive repo identity) are enforced by the semantic validator in scripts/release/validate-surfaces.sh, because a JSON Schema cannot express them.",
+  "type": "object",
+  "required": ["schema", "product", "surfaces"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "blessed/release-surfaces/v1" },
+    "product": {
+      "description": "Canonical root identity. `project` is NOT an accepted alias; a document carrying it (or both) is rejected by additionalProperties.",
+      "$ref": "#/$defs/token"
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/surface" }
+    }
+  },
+  "$defs": {
+    "token": {
+      "description": "Canonical lowercase token. No blanks, no coercion, no defaults.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "ownerName": {
+      "description": "GitHub OWNER segment, defined separately from the repository segment. Alphanumeric with single internal hyphens; no dot, underscore, leading or trailing hyphen, or consecutive hyphens; 1-39 characters TOTAL. The leading lookahead caps the whole token — counting hyphen-joined groups instead would let a 46-character owner through. Syntax validation only; this is not proof the owner exists.",
+      "type": "string",
+      "pattern": "^(?=.{1,39}$)[A-Za-z0-9](-?[A-Za-z0-9])*$"
+    },
+    "repoName": {
+      "description": "GitHub REPOSITORY segment: ASCII letters, digits, dot, hyphen, underscore, 1-100 characters, but never '.' or '..'. Leading-dot names such as .github are valid. Syntax validation only.",
+      "type": "string",
+      "pattern": "^(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$"
+    },
+    "repo": {
+      "description": "GitHub owner/repository. Composes $defs.ownerName and $defs.repoName into one pattern, since a JSON Schema pattern applies to the whole string. Identity comparison is case-insensitive and is done by the semantic validator. Syntax only — never a claim that the repository exists.",
+      "type": "string",
+      "pattern": "^(?=[^/]{1,39}/)[A-Za-z0-9](-?[A-Za-z0-9])*/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$"
+    },
+    "relPath": {
+      "description": "Relative POSIX path. Each segment must begin with an alphanumeric or underscore, which rejects in one production: absolute paths, '.', '..', empty segments, and dotfiles such as .git. The character class also rejects backslashes, globs, templates/placeholders, and percent-encoding.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$"
+    },
+    "relDirPrefix": {
+      "description": "Relative POSIX directory prefix with a REQUIRED trailing slash. Same segment rules as relPath. This replaces the undefined `releases/<tag>/*` template language: the receiver appends the validated tag and artifact basename as single safe segments.",
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*/$"
+    },
+    "publicBaseUrl": {
+      "description": "Single CANONICAL public origin+path, so equivalent authorities cannot have different spellings. https only; host must be lowercase; EXPLICIT PORTS ARE FORBIDDEN — partial normalization is a trap, since :443, :0443, and an omitted port all denote the same authority; no userinfo, query, fragment, percent-encoding, or dot segments; normalized; trailing slash REQUIRED. There is no separate public_prefix: one field carries this authority.",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*/([A-Za-z0-9_][A-Za-z0-9._-]*/)*$"
+    },
+    "surfaceKind": {
+      "enum": [
+        "public-download-surface",
+        "public-github-mirror",
+        "runtime-artifact-surface",
+        "runtime-deploy",
+        "registry-store-surface",
+        "product-release-bom",
+        "package-repository-surface"
+      ]
+    },
+    "publisherModel": {
+      "description": "CLOSED. Only surface-pull has prose-normative backing in releases.surfaces@1. producer-push-pr, state-repo-ci-through-api, and reviewed-pull-request are deliberately excluded from executable v1.",
+      "enum": ["surface-pull"]
+    },
+    "promotionTransport": {
+      "description": "CLOSED. Candidate-ready SIGNAL only, never publication authority. Both literals are prose-normative (releases.surfaces@1 Vocabulary; releases.promotion-handshake@1 Event contract).",
+      "enum": ["repository_dispatch", "workflow_dispatch"]
+    },
+    "promotionOutput": {
+      "description": "One deterministic generator output. `role` names a renderer TYPE, not a unique instance, so `id` supplies instance identity and multiple channels may share a renderer.",
+      "type": "object",
+      "required": ["id", "role", "repo_path"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/token" },
+        "role": { "enum": ["channel-pointer", "updater-pointer", "downloads-index"] },
+        "channel": { "$ref": "#/$defs/token" },
+        "repo_path": { "$ref": "#/$defs/relPath" },
+        "public_path": { "$ref": "#/$defs/relPath" },
+        "renderer_config": {
+          "description": "Path to a checked-in blessed/downloads-index-renderer-config/v1 file, read from the exact trusted receiver base SHA. Legal ONLY for role downloads-index, which cannot be rendered from the signed candidate alone: labels, primary choices, os/arch presentation, kind naming, site-facing MIME, and artifact selection have no candidate authority. Optional in the SCHEMA so every 0.2.3-valid declaration stays valid, but generator admission REJECTS a downloads-index that omits it.",
+          "$ref": "#/$defs/relPath"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "required": ["role"], "properties": { "role": { "enum": ["channel-pointer", "updater-pointer"] } } },
+          "then": { "required": ["channel", "public_path"] }
+        },
+        {
+          "if": { "type": "object", "required": ["role"], "properties": { "role": { "const": "downloads-index" } } },
+          "then": { "not": { "anyOf": [ { "required": ["channel"] }, { "required": ["public_path"] } ] } }
+        },
+        {
+          "description": "renderer_config is presentation policy for the index only; a pointer renderer has no presentation to declare.",
+          "if": { "type": "object", "required": ["role"], "properties": { "role": { "enum": ["channel-pointer", "updater-pointer"] } } },
+          "then": { "not": { "required": ["renderer_config"] } }
+        }
+      ]
+    },
+    "surface": {
+      "type": "object",
+      "required": ["id", "kind", "owner_repo", "producer_repos", "consumer_contract", "access_model"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/token" },
+        "kind": { "$ref": "#/$defs/surfaceKind" },
+        "owner_repo": { "$ref": "#/$defs/repo" },
+        "producer_repos": {
+          "description": "Nonempty and unique. A self-produced surface declares [owner_repo].",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repo" }
+        },
+        "consumer_contract": {
+          "description": "OPAQUE open vocabulary with closed syntax. Neither schema nor generator may use an unknown value to authorize, route, or select behavior.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/token" }
+        },
+        "access_model": {
+          "description": "OPAQUE open vocabulary with closed syntax. Same non-authorization rule as consumer_contract.",
+          "$ref": "#/$defs/token"
+        },
+        "publisher_model": { "$ref": "#/$defs/publisherModel" },
+        "promotion_transport": { "$ref": "#/$defs/promotionTransport" },
+        "public_base_url": { "$ref": "#/$defs/publicBaseUrl" },
+        "package_formats": {
+          "description": "package-repository-surface only (releases.package-repositories@1): the native repository formats this surface serves. Closed set.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["apt", "dnf"] }
+        },
+        "immutable_release_prefix": { "$ref": "#/$defs/relDirPrefix" },
+        "promotion_outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/promotionOutput" }
+        }
+      },
+      "allOf": [
+        {
+          "description": "public-download-surface carries the operational fields.",
+          "if": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "public-download-surface" } } },
+          "then": {
+            "required": ["public_base_url", "immutable_release_prefix", "promotion_outputs"],
+            "not": { "required": ["package_formats"] }
+          }
+        },
+        {
+          "description": "package-repository-surface (releases.package-repositories@1) carries public_base_url and package_formats, and NOT the browser-download fields: APT/DNF is not a download renderer.",
+          "if": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "package-repository-surface" } } },
+          "then": {
+            "required": ["public_base_url", "package_formats"],
+            "not": {
+              "anyOf": [
+                { "required": ["immutable_release_prefix"] },
+                { "required": ["promotion_outputs"] }
+              ]
+            }
+          }
+        },
+        {
+          "description": "Every other kind is universal-contract only in v1: declaration-shape support, not operational support.",
+          "if": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["public-github-mirror", "runtime-artifact-surface", "runtime-deploy", "registry-store-surface", "product-release-bom"] } } },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["public_base_url"] },
+                { "required": ["package_formats"] },
+                { "required": ["immutable_release_prefix"] },
+                { "required": ["promotion_outputs"] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
