@@ -10,7 +10,7 @@ TOOLS_IMAGE ?= ppc-tools
 # Terraform acts on exactly one declared workspace; nothing is inferred.
 TF_WORKSPACE ?=
 
-.PHONY: help deps check test build clean plan deploy verify-edge validate \
+.PHONY: help deps check test build clean plan deploy verify-edge validate cloudflare-token \
 	sync-scripts verify-scripts tools-image require-workspace
 
 help: ## Show available targets
@@ -58,15 +58,28 @@ verify-scripts: ## Verify vendored blessed-cicd scripts against their MANIFEST.s
 require-workspace:
 	@[ "$(TF_WORKSPACE)" = production ] || { echo "refusing: set TF_WORKSPACE=production explicitly (this surface has one workspace)"; exit 1; }
 
+# Operator credentials for plan/deploy/verify-edge, never in files, arguments or
+# logs: AWS from the SSO profile, Cloudflare from the macOS keychain item that
+# `make cloudflare-token` stores through a hidden prompt.
+AWS_PROFILE ?= portaj
+CF_KEYCHAIN_ITEM := packages-porta-codes-terraform-cloudflare
+WITH_CREDS = AWS_PROFILE=$(AWS_PROFILE) CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN:-$$(security find-generic-password -s $(CF_KEYCHAIN_ITEM) -w 2>/dev/null)}"
+
+cloudflare-token: ## Store the operator's Cloudflare API token in the macOS keychain (hidden prompt)
+	@security add-generic-password -U -s $(CF_KEYCHAIN_ITEM) -a terraform -w
+	@echo "stored in keychain item $(CF_KEYCHAIN_ITEM)"
+
 plan: require-workspace ## Terraform plan for TF_WORKSPACE=production → plan.tmp + plan.out
-	terraform init -input=false
-	terraform workspace select -or-create $(TF_WORKSPACE)
-	terraform plan -input=false -out=plan.tmp
-	terraform show -no-color plan.tmp > plan.out
+	@aws sts get-caller-identity --profile $(AWS_PROFILE) >/dev/null 2>&1 || { echo "refusing: AWS profile $(AWS_PROFILE) has no session — run: aws sso login --profile $(AWS_PROFILE)"; exit 1; }
+	@security find-generic-password -s $(CF_KEYCHAIN_ITEM) >/dev/null 2>&1 || [ -n "$${CLOUDFLARE_API_TOKEN:-}" ] || { echo "refusing: no Cloudflare token — run: make cloudflare-token"; exit 1; }
+	$(WITH_CREDS) terraform init -input=false
+	$(WITH_CREDS) terraform workspace select -or-create $(TF_WORKSPACE)
+	$(WITH_CREDS) terraform plan -input=false -out=plan.tmp
+	$(WITH_CREDS) terraform show -no-color plan.tmp > plan.out
 
 deploy: require-workspace ## Apply the reviewed plan.tmp (infrastructure only; packages are published by CI)
 	@[ -f plan.tmp ] || { echo "refusing: no plan.tmp — run make plan and review plan.out first"; exit 1; }
-	terraform apply -input=false plan.tmp
+	$(WITH_CREDS) terraform apply -input=false plan.tmp
 
 verify-edge: ## Live edge as approved: route fails closed, entrypoints routed no-cache, v2 pointer (CLOUDFLARE_API_TOKEN: Workers Routes Read)
-	bash scripts/surface/verify-edge.sh
+	@$(WITH_CREDS) bash scripts/surface/verify-edge.sh
