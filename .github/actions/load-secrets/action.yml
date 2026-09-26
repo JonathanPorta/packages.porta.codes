@@ -16,7 +16,7 @@ description: 'Load ONE authority domain''s secrets from Bitwarden Secrets Manage
 # workflows refuse to run while their domain's line still holds one.
 #
 # `default` is the ordinary domain (repository-level BWS_ACCESS_TOKEN, BWS
-# project packages-porta-codes): Cloudflare ONLY, for Terraform and edge
+# project packages.porta.codes): Cloudflare ONLY, for Terraform and edge
 # verification. It holds NO AWS credential — every AWS call is a GitHub OIDC
 # role session (blessed-cicd #9). Any unknown or empty profile FAILS CLOSED.
 # The `secrets:` blocks are parsed line by line as `<UUID> > <ENV_VAR>` — no
@@ -55,9 +55,9 @@ runs:
         esac
         echo "load-secrets profile: $PROFILE"
 
-    # ── profile: default ── BWS project packages-porta-codes (+ the shared
+    # ── profile: default ── BWS project packages.porta.codes (+ the shared
     # _shared-ci for CLOUDFLARE_ACCOUNT_ID), machine account
-    # packages-porta-codes-ci, repository-level BWS_ACCESS_TOKEN. Cloudflare only.
+    # packages.porta.codes-ci, repository-level BWS_ACCESS_TOKEN. Cloudflare only.
     # CLOUDFLARE_ACCOUNT_ID is `shared`: its UUID is the canonical _shared-ci one
     # baked in here (bws bootstrap.sh shared_uuid_for, the same id every static
     # site's loader carries); the bootstrap never rewrites shared lines.
@@ -71,8 +71,8 @@ runs:
           00000000-0000-0000-0000-000000000000 > CLOUDFLARE_API_TOKEN
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
 
-    # ── profile: candidate-ingest ── BWS project packages-porta-codes-candidate-ingest,
-    # machine account packages-porta-codes-candidate-ingest-ci, Environment
+    # ── profile: candidate-ingest ── BWS project packages.porta.codes-candidate-ingest,
+    # machine account packages.porta.codes-candidate-ingest-ci, Environment
     # candidate-ingest (branch main).
     - name: '🔐 Load the candidate-ingest secret'
       if: ${{ inputs.profile == 'candidate-ingest' }}
@@ -83,8 +83,8 @@ runs:
           00000000-0000-0000-0000-000000000000 > PACKAGES_CANDIDATE_READ_TOKEN
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
 
-    # ── profile: repository-signing ── BWS project packages-porta-codes-repo-signing,
-    # machine account packages-porta-codes-repo-signing-ci, Environment
+    # ── profile: repository-signing ── BWS project packages.porta.codes-repo-signing,
+    # machine account packages.porta.codes-repo-signing-ci, Environment
     # repository-signing (branch main).
     - name: '🔐 Load the repository-signing secret'
       if: ${{ inputs.profile == 'repository-signing' }}

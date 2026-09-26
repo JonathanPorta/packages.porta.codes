@@ -107,7 +107,7 @@ PROVISIONING.md step by step (directory, bootstrapper command, machine account
 and Environment for every domain). Never paste a private file into a terminal
 command, a chat or a commit.
 
-  $OUT/repository.sec.asc       → PACKAGES_REPO_SIGNING_KEY      (packages-porta-codes-repo-signing)
+  $OUT/repository.sec.asc       → PACKAGES_REPO_SIGNING_KEY      (packages.porta.codes-repo-signing)
   $OUT/kioskd-rpm.sec.asc       → KIOSKD_RPM_SIGNING_KEY         (kioskd-rpm-signing)
   $OUT/corpus-rpm.sec.asc       → CORPUS_RPM_SIGNING_KEY         (corpus-rpm-signing)
   $OUT/keysprout-rpm.sec.asc    → KEYSPROUT_RPM_SIGNING_KEY      (keysprout-rpm-signing)

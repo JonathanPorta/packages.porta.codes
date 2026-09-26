@@ -1,6 +1,6 @@
 # Authority domain: candidate-ingest (secrets.bwsm-authority-domains@1).
-# BWS project packages-porta-codes-candidate-ingest, machine account
-# packages-porta-codes-candidate-ingest-ci (read-only on this project only),
+# BWS project packages.porta.codes-candidate-ingest, machine account
+# packages.porta.codes-candidate-ingest-ci (read-only on this project only),
 # GitHub Environment candidate-ingest (allowed ref: main).
 # A fine-grained PAT: Contents READ on JonathanPorta/kioskd, corpus, keysprout.
 # Nothing else — this job reads private producer bytes and must never be able
