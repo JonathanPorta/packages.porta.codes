@@ -50,9 +50,18 @@ $5/month minimum with 10 M requests included, then $0.30 per million
 | Cloudflare DNS + proxy | existing zone | $0 |
 | Worker | every request to the hostname runs it; expected < 5,000/day | $0 on Free; **$0 marginal** if the account is already on Workers Paid; $5/month only if Paid must be enabled for this alone |
 
-**Expected: under $1/month. Worst plausible: about $5/month** (Workers Paid
-enabled solely for this). Exceeding the Free plan fails closed — clients get
-errors, never wrong data.
+These are **estimates, not maxima**. Expected: under $1/month; plausible high:
+about $5/month (Workers Paid enabled solely for this). What is actually
+enforced, and what is not:
+
+| Control | Enforced? | Effect |
+|---|---|---|
+| Cloudflare Workers **Free** plan (recommended to stay on it) | **yes — a hard cap** | above 100,000 requests/day the Worker errors instead of billing: Worker cost is exactly $0, and excess traffic fails closed (errors, never wrong data) |
+| S3 storage / requests / egress | **no cap exists** in S3 | bounded in practice by the retention above and by edge caching of immutable objects; every write is a reviewed publication |
+| AWS Budget alert on the bucket's cost-allocation tag (optional, needs your OK) | alert only, not a cap | email when month-to-date passes e.g. $2 |
+
+So a maximum can only be stated for the Worker ($0 on Free). S3 has no
+enforced ceiling; the numbers above are estimates.
 
 ## 3. AWS publisher role
 
@@ -115,6 +124,17 @@ Bucket-policy guards added by Terraform (deny statements, principal = that role)
 
 Repository variables: `AWS_ACCOUNT_ID`, `AWS_REGION`.
 
+### Routing authority (separate from publishing)
+
+The router holds **no credential at all**. It reads the bucket through its
+public website endpoint — the same public read clients have — and can only
+GET/HEAD. It cannot write, list or delete anything. The only authority involved
+is **deploying** it: the operator's Cloudflare API token used by `make deploy`
+(Workers Scripts: Edit, Workers Routes: Edit, DNS: Edit on `porta.codes`). That
+token is never given to CI or to the publisher role, and the publisher role has
+no Cloudflare access. Changing the router therefore takes a reviewed Terraform
+change applied by the operator, never a publication.
+
 ## 4. Signing and read authority
 
 **Existing identities are kept.** Nothing here rotates, replaces or moves an
@@ -175,3 +195,40 @@ Plan, with no new credential:
    repository only — so the PR is opened by an identity whose events start CI.
    That request comes with the evidence from (1) and (2); it is not part of this
    approval.
+
+## 6. Operating procedures
+
+- **Publish.** A reviewed inventory PR merges → `publish.yml`: fetch and check
+  every byte against the inventory → generate (no secret) → sign (repository key
+  only) → verify (public keys only) → staged install/upgrade through the router
+  → create every object once → ONE conditional write of the pointer bound to the
+  activation read at plan time → read-back through `https://packages.porta.codes/`
+  with real apt/dnf. The new activation revision is in the run summary.
+- **Retry / resume.** Re-run the workflow. Objects already created are skipped;
+  missing ones are created; nothing is overwritten. A run that lost the pointer
+  comparison fails and is never retried as is — the next run re-plans against
+  the live activation.
+- **Replay.** Re-running for an inventory already live is a no-op (no objects,
+  no activation).
+- **Rollback.** Revert the inventory change in a reviewed PR; publishing it
+  activates a generation of the older inventory through a NEW activation
+  revision (every package it references is still stored; old pointer bytes are
+  never restored). Installed clients are not downgraded (PR-13).
+- **Recovery.** Origin errors are never cached at the edge, so a transient S3
+  failure recovers on the next request. A DNF client that fetched `repomd.xml`
+  and its signature across an activation refuses the pair and recovers on
+  refresh. If a publication fails after creating objects but before activation,
+  nothing is served differently; re-run.
+
+## 7. Links
+
+- Tooling: blessed-cicd #308 (merged `a250255`), released as
+  [release-v0.5.0](https://github.com/JonathanPorta/blessed-cicd/releases/tag/release-v0.5.0);
+  signing-v0.3.0 (#306).
+- Standard: `releases.package-repositories@1` (PR-7/8/9/10/13 as amended in #308),
+  `releases.linux-packaging@1`, `releases.surfaces@1`.
+- Plan and clause→evidence matrix: blessed-cicd
+  `tasks/project-linux-packaging-pilot.md` (update PR linked in the request).
+- This repository (local until step 2): `main.tf` (bucket, guards, DNS,
+  Worker), `release-surfaces.yaml`, `.github/workflows/{ci,admit-candidate,publish}.yml`,
+  `scripts/provision/generate-keys.sh`, `tests/e2e.sh`.

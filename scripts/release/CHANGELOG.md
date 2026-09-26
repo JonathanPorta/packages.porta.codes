@@ -66,7 +66,10 @@ repository server. Five steps, each holding only what it needs:
   store. Requests for stable entrypoint URLs read the pointer uncached and are
   served from the active generation's prefix with `Cache-Control: no-cache`;
   every other path passes through, so every advertised by-hash, package and
-  repodata URL of every generation stays addressable. No KV, Durable Object,
+  repodata URL of every generation stays addressable. Only successful (2xx)
+  responses for immutable URLs get an edge TTL (`cacheTtlByStatus`); any other
+  status is never cached, so an origin error or a not-yet-present key recovers
+  on the next request. No KV, Durable Object,
   database or lease; GET/HEAD only. `lib/pkgrepo-lib.sh`
   `pkgrepo_is_entrypoint` is the same rule, and the verifier refuses a
   generation whose classes disagree with it.

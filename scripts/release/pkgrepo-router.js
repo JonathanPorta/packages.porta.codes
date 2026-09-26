@@ -15,8 +15,14 @@
 //     to the same path, so every URL any generation ever advertised stays
 //     addressable.
 //
-// Caching (PR-8). The subrequest for a generation-prefixed object may be cached
-// at the edge forever: that URL names immutable bytes. The response to the
+// Caching (PR-8). A SUCCESSFUL response for an immutable URL — a
+// generation-prefixed object, a package, a by-hash index, checksum-named
+// repodata (IMMUTABLE_PATTERNS) — may be cached at the edge for a year: that URL
+// names bytes that never change. Nothing else is: every non-2xx status is
+// marked uncacheable (cacheTtlByStatus), so a transient origin error or a key
+// that does not exist yet is retried on the next request, never replayed from
+// the edge. Other paths (`_state/`, site pages) keep the origin's own headers.
+// The pointer is fetched with `cache: "no-store"`. The response to the
 // client for a STABLE entrypoint URL carries `Cache-Control: no-cache` — any
 // cache must revalidate it before reuse, and revalidation comes back here and is
 // resolved against the pointer again — never the origin's immutable header. So
@@ -39,10 +45,25 @@ export const ENTRYPOINT_PATTERNS = [
   /(^|\/)repodata\/repomd\.xml(\.asc)?$/,
   /\.(sources|repo|asc)$/,
 ];
+export const IMMUTABLE_PATTERNS = [
+  /^_generations\/[0-9a-f]{64}\//,
+  /(^|\/)by-hash\/SHA256\/[0-9a-f]{64}$/,
+  /(^|\/)repodata\/[0-9a-f]{64}-[^/]+$/,
+  /\.(deb|rpm)$/,
+];
+// Success cached for a year; any other status never cached (negative TTL).
+export const IMMUTABLE_CF = {
+  cacheEverything: true,
+  cacheTtlByStatus: { "200-299": 31536000, "300-599": -1 },
+};
 const GEN_PREFIX = "_generations/";
 const POINTER = "_state/generation.json";
 const PASS_REQUEST_HEADERS = ["if-none-match", "if-modified-since", "range", "if-range"];
 const DROP_RESPONSE_HEADERS = ["cache-control", "expires", "age", "set-cookie"];
+
+export function isImmutable(path) {
+  return IMMUTABLE_PATTERNS.some((re) => re.test(path));
+}
 
 export function isEntrypoint(path) {
   return !path.startsWith(GEN_PREFIX) && ENTRYPOINT_PATTERNS.some((re) => re.test(path));
@@ -81,18 +102,18 @@ export default {
     if (path.split("/").some((seg) => seg === ".." || seg === ".")) return plain(400, "bad path");
 
     if (!isEntrypoint(path)) {
-      // Shared immutable object (or a generation-addressed URL): the same path.
-      return fetch(`${origin}/${url.pathname.replace(/^\/+/, "")}`, {
-        method: request.method,
-        headers: originRequestHeaders(request),
-        cf: { cacheEverything: true },
-      });
+      // A shared immutable object, a generation-addressed URL, or anything
+      // else in the bucket: the same path. Only immutable URLs get edge TTLs.
+      const init = { method: request.method, headers: originRequestHeaders(request) };
+      if (isImmutable(path)) init.cf = IMMUTABLE_CF;
+      else if (path.startsWith("_state/")) init.cache = "no-store";
+      return fetch(`${origin}/${url.pathname.replace(/^\/+/, "")}`, init);
     }
 
     // The activation pointer: read on EVERY request, never from a cache.
     let pointer;
     try {
-      const r = await fetch(`${origin}/${POINTER}`, { cache: "no-store", cf: { cacheTtl: 0 } });
+      const r = await fetch(`${origin}/${POINTER}`, { cache: "no-store" });
       if (r.status === 404) return plain(404, "no generation is active");
       if (!r.ok) return plain(503, "activation pointer unavailable", { "retry-after": "5" });
       pointer = await r.json();
@@ -107,7 +128,7 @@ export default {
     const r = await fetch(`${origin}/${GEN_PREFIX}${gid}/${url.pathname.replace(/^\/+/, "")}`, {
       method: request.method,
       headers: originRequestHeaders(request),
-      cf: { cacheEverything: true, cacheTtl: 31536000 },
+      cf: IMMUTABLE_CF,
     });
     const headers = new Headers(r.headers);
     for (const name of DROP_RESPONSE_HEADERS) headers.delete(name);

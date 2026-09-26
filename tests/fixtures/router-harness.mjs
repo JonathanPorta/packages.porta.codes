@@ -8,8 +8,16 @@
 //           304 for a matching If-None-Match.
 //   router  the Worker's fetch() with env.ORIGIN = that origin.
 //
-// Node's fetch does not take Workers' `cf` or `cache` options; the harness
-// drops them. It writes the router's port to PORTFILE and serves until killed.
+// Cloudflare's edge cache is MODELLED, not dropped: a subrequest with
+// `cf.cacheEverything` is looked up in an in-memory edge cache keyed by URL, and
+// a GET response is stored for the TTL Cloudflare would give it —
+// `cf.cacheTtlByStatus` (a negative TTL: not cached) or, when set,
+// `cf.cacheTtl`, which applies to EVERY status. `cache: "no-store"` bypasses
+// it. HEAD is answered from a cached GET. Origin faults: a file
+// STORE/faults/<key> holding a status makes the origin answer that status for
+// the key until the file is removed. Every origin request is appended to
+// STORE/origin.log ("METHOD key"). It writes the router's port to PORTFILE
+// and serves until killed.
 // ROUTER_BIND (default 127.0.0.1) and ROUTER_PORT (default: any) set where the
 // router listens.
 import http from "node:http";
@@ -38,6 +46,15 @@ const origin = http.createServer((req, res) => {
     res.writeHead(400).end();
     return;
   }
+  // Best effort: a store mounted read-only simply has no origin log.
+  try {
+    fs.appendFileSync(path.join(store, "origin.log"), `${req.method} ${key}\n`);
+  } catch {}
+  const fault = path.join(store, "faults", key);
+  if (fs.existsSync(fault)) {
+    res.writeHead(Number(fs.readFileSync(fault, "utf8").trim()), { "content-type": "text/plain" }).end("fault\n");
+    return;
+  }
   const file = path.resolve(root, key);
   if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
     res.writeHead(404, { "content-type": "text/plain" }).end("NoSuchKey\n");
@@ -60,10 +77,31 @@ const origin = http.createServer((req, res) => {
 await new Promise((r) => origin.listen(0, "127.0.0.1", r));
 const ORIGIN = `http://127.0.0.1:${origin.address().port}`;
 
+function edgeTtl(cf, status) {
+  if (typeof cf.cacheTtl === "number") return cf.cacheTtl;
+  for (const [range, ttl] of Object.entries(cf.cacheTtlByStatus || {})) {
+    const [lo, hi] = range.split("-").map(Number);
+    if (status >= lo && status <= (hi || lo)) return ttl;
+  }
+  return 0;
+}
+const edge = new Map();
 const realFetch = globalThis.fetch;
-globalThis.fetch = (url, init = {}) => {
+globalThis.fetch = async (url, init = {}) => {
   const { cf, cache, ...rest } = init;
-  return realFetch(url, rest);
+  const method = rest.method || "GET";
+  if (cache === "no-store" || !cf || !cf.cacheEverything) return realFetch(url, rest);
+  const hit = edge.get(url);
+  if (hit && hit.expires > Date.now()) {
+    return new Response(method === "HEAD" ? null : hit.body, { status: hit.status, headers: hit.headers });
+  }
+  const r = await realFetch(url, rest);
+  const ttl = edgeTtl(cf, r.status);
+  if (method !== "GET" || ttl <= 0 || r.status === 304) return r;
+  const body = await r.arrayBuffer();
+  const headers = [...r.headers];
+  edge.set(url, { status: r.status, headers, body, expires: Date.now() + ttl * 1000 });
+  return new Response(body, { status: r.status, headers });
 };
 
 const router = http.createServer(async (req, res) => {

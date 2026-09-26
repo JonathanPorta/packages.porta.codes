@@ -12,8 +12,6 @@ SIGNING_VERSION=0.3.0
 SIGNING_TAG=signing-v0.3.0
 
 # Candidate validation and the package-repository tooling (pkgrepo-*.sh).
-# UNRELEASED — confirm on tag: release 0.5.0 is blessed-cicd #308 (in review).
-# Until the tag exists, scripts/release is vendored from that PR's head; see
-# scripts/VENDORED-FROM.
+# Released: release-v0.5.0 (blessed-cicd #308, merge a250255).
 RELEASE_VERSION=0.5.0
 RELEASE_TAG=release-v0.5.0
