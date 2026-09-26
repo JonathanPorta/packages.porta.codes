@@ -1,6 +1,6 @@
 # Authority domain: repository-signing (secrets.bwsm-authority-domains@1).
-# BWS project packages-porta-codes-repo-signing, machine account
-# packages-porta-codes-repo-signing-ci (read-only on this project only),
+# BWS project packages.porta.codes-repo-signing, machine account
+# packages.porta.codes-repo-signing-ci (read-only on this project only),
 # GitHub Environment repository-signing (allowed ref: main).
 # The ARMORED OpenPGP private repository key (RSA 4096) that signs InRelease,
 # Release.gpg and repomd.xml.asc. Nothing else.

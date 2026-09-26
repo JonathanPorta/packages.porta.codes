@@ -101,7 +101,7 @@ I commit the public halves and fingerprints.
 
 | File in `$KEYS` | Becomes secret | In BWS project |
 |---|---|---|
-| `repository.sec.asc` | `PACKAGES_REPO_SIGNING_KEY` | `packages-porta-codes-repo-signing` |
+| `repository.sec.asc` | `PACKAGES_REPO_SIGNING_KEY` | `packages.porta.codes-repo-signing` |
 | `kioskd-rpm.sec.asc` | `KIOSKD_RPM_SIGNING_KEY` | `kioskd-rpm-signing` |
 | `corpus-rpm.sec.asc` | `CORPUS_RPM_SIGNING_KEY` | `corpus-rpm-signing` |
 | `keysprout-rpm.sec.asc` | `KEYSPROUT_RPM_SIGNING_KEY` | `keysprout-rpm-signing` |
@@ -117,7 +117,7 @@ github.com → Settings → Developer settings → Fine-grained tokens → Gener
 - Name `packages-porta-codes-candidate-read`; Resource owner **JonathanPorta**;
   Expiration **180 days** (put the date in your calendar; renewal is
   `--rotate-secret PACKAGES_CANDIDATE_READ_TOKEN --no-secret-values` in the
-  `packages-porta-codes-candidate-ingest` domain).
+  `packages.porta.codes-candidate-ingest` domain).
 - Repository access: **Only select repositories** → `JonathanPorta/kioskd`,
   `JonathanPorta/corpus`, `JonathanPorta/keysprout`.
 - Repository permissions: **Contents: Read-only** (Metadata: Read-only is
@@ -152,22 +152,22 @@ it takes no `--gh-environments` and uses the default `.bws-secrets-list` and
 ```sh
 cd /Users/portaj/devel/portaj/packages.porta.codes
 git switch main && git pull --ff-only && git switch -c jp/c/bws-default
-make bws-bootstrap ARGS="--plan"               # (a) preview: project packages-porta-codes, machine account packages-porta-codes-ci
+make bws-bootstrap ARGS="--plan"               # (a) preview: project packages.porta.codes, machine account packages.porta.codes-ci
 make bws-bootstrap ARGS="--no-secret-values"   # (b) create
 ```
 
-In the web vault for row 0: machine account **`packages-porta-codes-ci`** gets
-**Can read** on `packages-porta-codes` **and** on `_shared-ci` (for the shared
+In the web vault for row 0: machine account **`packages.porta.codes-ci`** gets
+**Can read** on `packages.porta.codes` **and** on `_shared-ci` (for the shared
 `CLOUDFLARE_ACCOUNT_ID`) and nothing else; its token goes to the bootstrapper's
 hidden prompt, which stores it as the **repository** secret `BWS_ACCESS_TOKEN`;
-the secret `CLOUDFLARE_API_TOKEN` in `packages-porta-codes` gets the §3b token.
+the secret `CLOUDFLARE_API_TOKEN` in `packages.porta.codes` gets the §3b token.
 `CLOUDFLARE_ACCOUNT_ID` is **not** created or filled here: it is a `shared`
 key whose value lives in `_shared-ci`, and the loader already carries its
 canonical `_shared-ci` id (`6c68ee9e-…`, the same id every static site's loader
 carries — `scripts/bws/bootstrap.sh` `shared_uuid_for`). Re-run (b) once the
 secret exists: it fills only the `CLOUDFLARE_API_TOKEN` line. Then **stop at
 the checkpoint below**.
-For row 0 the bootstrapper's `Cloudflare token packages-porta-codes-ci` summary
+For row 0 the bootstrapper's `Cloudflare token packages.porta.codes-ci` summary
 line is just its suggested token name — the §3b name is fine.
 
 **Rows 1–7 — Environment-scoped domains.**
@@ -235,8 +235,8 @@ the others intact.
 
 | # | Directory | `<domain>` | `<project>` (machine account `<project>-ci`) | `<environment>` | `<secret>` ← value |
 |---|---|---|---|---|---|
-| 1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages-porta-codes-repo-signing` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` ← `$KEYS/repository.sec.asc` |
-| 2 | `/Users/portaj/devel/portaj/packages.porta.codes` | `candidate-ingest` | `packages-porta-codes-candidate-ingest` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` ← the §3 PAT |
+| 1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages.porta.codes-repo-signing` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` ← `$KEYS/repository.sec.asc` |
+| 2 | `/Users/portaj/devel/portaj/packages.porta.codes` | `candidate-ingest` | `packages.porta.codes-candidate-ingest` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` ← the §3 PAT |
 | 3 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `rpm-signing` | `KIOSKD_RPM_SIGNING_KEY` ← `$KEYS/kioskd-rpm.sec.asc` |
 | 4 | `/Users/portaj/devel/portaj/corpus` | `rpm-signing` | `corpus-rpm-signing` | `rpm-signing` | `CORPUS_RPM_SIGNING_KEY` ← `$KEYS/corpus-rpm.sec.asc` |
 | 5 | `/Users/portaj/devel/portaj/corpus` | `release-signing` | `corpus-release-signing` | `release-signing` | `CORPUS_RELEASE_SIGNING_KEY` ← `$KEYS/corpus-release.pem` |

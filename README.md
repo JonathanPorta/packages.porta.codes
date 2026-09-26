@@ -137,9 +137,9 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
 
    | Domain | BWS project / machine account | Environment | Secret |
    |---|---|---|---|
-   | default (Cloudflare only) | `packages-porta-codes` / `packages-porta-codes-ci` | repository-level token | `CLOUDFLARE_API_TOKEN` (+ shared `CLOUDFLARE_ACCOUNT_ID`) |
-   | repository signing | `packages-porta-codes-repo-signing` / `…-ci` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` (armored private key) |
-   | candidate ingest | `packages-porta-codes-candidate-ingest` / `…-ci` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` (fine-grained PAT, Contents: read on kioskd, corpus, keysprout) |
+   | default (Cloudflare only) | `packages.porta.codes` / `packages.porta.codes-ci` | repository-level token | `CLOUDFLARE_API_TOKEN` (+ shared `CLOUDFLARE_ACCOUNT_ID`) |
+   | repository signing | `packages.porta.codes-repo-signing` / `…-ci` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` (armored private key) |
+   | candidate ingest | `packages.porta.codes-candidate-ingest` / `…-ci` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` (fine-grained PAT, Contents: read on kioskd, corpus, keysprout) |
    | publication, Terraform plan/apply | none — GitHub OIDC | `repository-publication`, `infrastructure-plan`, `infrastructure` | — |
    | producer RPM signing (in each producer) | `<repo>-rpm-signing` / `…-ci` | per producer | `<REPO>_RPM_SIGNING_KEY` |
    | producer candidate signing (corpus, keysprout) | `<repo>-release-signing` / `…-ci` | per producer | `<REPO>_RELEASE_SIGNING_KEY` |
