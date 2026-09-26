@@ -27,7 +27,7 @@ No separate PR-opening credential is requested (§5).
 | Hostname | `packages.porta.codes` (zone `porta.codes`, already on Cloudflare) |
 | Owner repository | new `JonathanPorta/packages.porta.codes`, default branch `main` — the one infrastructure owner of the bucket, the hostname, the Worker and the repository key (PR-1) |
 | Visibility | **public** (recommended). Everything in it is public by design — inventory, public keys, workflows, the served repository — and no workflow prints a secret. Public also makes GitHub-hosted runners free, including **native arm64** runners, so the Debian arm64 / Fedora aarch64 rows could get native client evidence instead of "not exercised here". Private works too; then arm64 rows stay producer-emulated evidence only. |
-| Rulesets on `main` | require a PR, one approving review, and the `CI` required check; no force-push, no deletion |
+| Rulesets on `main` | require a PR (squash only), resolved review threads, and the required checks `🔎 check` and `🔁 end to end (native x86_64)` (strict); no force-push, no deletion. GitHub approving-review count is 0, as in the portfolio's other repos: every PR is opened by the owner's account, which GitHub does not let approve its own PR, so the independent review is the prrq review gate, and admission PRs (opened by `github-actions`) additionally get the owner's review |
 
 ## 2. Infrastructure and expected cost
 
