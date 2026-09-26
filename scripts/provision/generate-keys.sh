@@ -32,26 +32,46 @@ for t in gpg jq openssl; do command -v "$t" >/dev/null 2>&1 || {
 }
 umask 077
 mkdir -m 700 "$OUT"
-export GNUPGHOME="$OUT/.gnupg"
-mkdir -m 700 "$GNUPGHOME"
+# A SHORT private GNUPGHOME: gpg-agent's socket lives inside it, and a long
+# path (macOS temp or scratch directories) exceeds the socket path limit, which
+# makes key generation fail. It is removed on exit, with its agent.
+GNUPGHOME="$(mktemp -d /tmp/ppcgpg.XXXXXX)"
+export GNUPGHOME
+chmod 700 "$GNUPGHOME"
+cleanup() {
+  gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+  rm -rf "${GNUPGHOME:?}"
+}
+trap cleanup EXIT
 YEAR="$(date -u +%Y)"
 
 openpgp() { # uid, stem → fingerprint; writes stem.pub.asc (public) and stem.sec.asc (0600)
-  gpg --batch --quiet --passphrase '' --quick-gen-key "$1" rsa4096 sign never 2>/dev/null
+  gpg --batch --quiet --passphrase '' --quick-gen-key "$1" rsa4096 sign never >/dev/null 2>"$GNUPGHOME/err" || {
+    echo "generate-keys: gpg could not generate $2: $(tail -2 "$GNUPGHOME/err")" >&2
+    exit 2
+  }
   local fpr
   fpr="$(gpg --batch --with-colons --list-keys "$1" 2>/dev/null | awk -F: '/^fpr:/{print $10; exit}')"
-  gpg --batch --armor --export "$fpr" 2>/dev/null >"$OUT/$2.pub.asc"
-  gpg --batch --armor --export-secret-keys "$fpr" 2>/dev/null >"$OUT/$2.sec.asc"
+  [ "${#fpr}" = 40 ] || {
+    echo "generate-keys: no fingerprint for $2" >&2
+    exit 2
+  }
+  gpg --batch --armor --export "$fpr" >"$OUT/$2.pub.asc"
+  gpg --batch --armor --export-secret-keys "$fpr" >"$OUT/$2.sec.asc"
   chmod 600 "$OUT/$2.sec.asc"
   chmod 644 "$OUT/$2.pub.asc"
+  if [ ! -s "$OUT/$2.pub.asc" ] || [ ! -s "$OUT/$2.sec.asc" ]; then
+    echo "generate-keys: $2 was not exported" >&2
+    exit 2
+  fi
   printf '%s' "$fpr"
 }
 
 REPO_FPR="$(openpgp "packages.porta.codes repository signing $YEAR <packages@porta.codes>" repository)"
-declare -A RPM_FPR
-for p in kioskd corpus keysprout; do
-  RPM_FPR[$p]="$(openpgp "$p RPM signing $YEAR <$p-rpm@porta.codes>" "$p-rpm")"
-done
+# Plain variables, not an associative array: macOS ships bash 3.2.
+KIOSKD_FPR="$(openpgp "kioskd RPM signing $YEAR <kioskd-rpm@porta.codes>" kioskd-rpm)"
+CORPUS_FPR="$(openpgp "corpus RPM signing $YEAR <corpus-rpm@porta.codes>" corpus-rpm)"
+KEYSPROUT_FPR="$(openpgp "keysprout RPM signing $YEAR <keysprout-rpm@porta.codes>" keysprout-rpm)"
 for p in corpus keysprout; do
   bash "$ROOT/scripts/signing/keygen.sh" --out-private "$OUT/$p-release.pem" --out-public-base64 "$OUT/$p-release.pub" \
     --key-id "$p-$YEAR-01" >/dev/null
@@ -60,16 +80,15 @@ for p in corpus keysprout; do
     '{schema: "blessed/signing-trust-store/v1", keys: {($id): {profile: "ed25519-detached-v1", public_key_base64: $k, status: "active"}}}' \
     >"$OUT/$p-trust-store.json"
 done
-rm -rf "$GNUPGHOME"
 
 cat <<EOF
 Generated in $OUT (private files 0600; nothing uploaded, nothing secret printed).
 
 FINGERPRINTS — record these in the PR that installs the public halves
   repository key   $REPO_FPR
-  kioskd RPM key   ${RPM_FPR[kioskd]}
-  corpus RPM key   ${RPM_FPR[corpus]}
-  keysprout RPM    ${RPM_FPR[keysprout]}
+  kioskd RPM key   $KIOSKD_FPR
+  corpus RPM key   $CORPUS_FPR
+  keysprout RPM    $KEYSPROUT_FPR
   corpus candidate key id corpus-$YEAR-01, keysprout candidate key id keysprout-$YEAR-01 (Ed25519)
 
 PUBLIC HALVES — commit in THIS repository
@@ -83,39 +102,17 @@ PUBLIC HALVES — commit in THIS repository
   Producers commit their own public halves too (RPM key for LP-9 verification,
   trust store for candidate validation) in their release-ceremony PRs.
 
-SECRETS — one BWS project + read-only "-ci" machine account + GitHub
-Environment per authority domain. Run each bootstrap with --no-secret-values,
-then paste the named file's CONTENTS into the secret in the Bitwarden web UI.
+SECRETS — install each private file ONLY through the Bitwarden web UI, following
+PROVISIONING.md step by step (directory, bootstrapper command, machine account
+and Environment for every domain). Never paste a private file into a terminal
+command, a chat or a commit.
 
-  In JonathanPorta/packages.porta.codes (Environments must exist first:
-  repository-signing, candidate-ingest, repository-publication; allowed ref: main):
-    scripts/bws/bootstrap.sh --app-name packages-porta-codes-repo-signing \\
-      --secrets-list .bws/repository-signing.list --loader .github/actions/load-repository-signing/action.yml \\
-      --project-id-file .bws/repository-signing.env --gh-environments repository-signing --no-secret-values
-        → machine account packages-porta-codes-repo-signing-ci
-        → PACKAGES_REPO_SIGNING_KEY = contents of $OUT/repository.sec.asc
-    scripts/bws/bootstrap.sh --app-name packages-porta-codes-candidate-ingest \\
-      --secrets-list .bws/candidate-ingest.list --loader .github/actions/load-candidate-ingest/action.yml \\
-      --project-id-file .bws/candidate-ingest.env --gh-environments candidate-ingest --no-secret-values
-        → machine account packages-porta-codes-candidate-ingest-ci
-        → PACKAGES_CANDIDATE_READ_TOKEN = a fine-grained PAT created in the GitHub UI:
-          Contents READ on JonathanPorta/kioskd, corpus and keysprout; nothing else
-
-  In each producer repository (its release-ceremony PR adds the .bws list,
-  loader and Environment named here):
-    kioskd:    --app-name kioskd-rpm-signing     → kioskd-rpm-signing-ci,     KIOSKD_RPM_SIGNING_KEY    = $OUT/kioskd-rpm.sec.asc
-    corpus:    --app-name corpus-rpm-signing     → corpus-rpm-signing-ci,     CORPUS_RPM_SIGNING_KEY    = $OUT/corpus-rpm.sec.asc
-               --app-name corpus-release-signing → corpus-release-signing-ci, CORPUS_RELEASE_SIGNING_KEY = $OUT/corpus-release.pem
-    keysprout: --app-name keysprout-rpm-signing     → keysprout-rpm-signing-ci,     KEYSPROUT_RPM_SIGNING_KEY    = $OUT/keysprout-rpm.sec.asc
-               --app-name keysprout-release-signing → keysprout-release-signing-ci, KEYSPROUT_RELEASE_SIGNING_KEY = $OUT/keysprout-release.pem
-    each: scripts/bws/bootstrap.sh --app-name <name> --secrets-list .bws/<domain>.list \\
-            --loader .github/actions/load-<domain>/action.yml --project-id-file .bws/<domain>.env \\
-            --gh-environments <domain> --no-secret-values
-          where <domain> is rpm-signing or release-signing (the producer's
-          Environment of that name; allowed ref main, plus v* tags if the
-          release workflow runs on tags)
-
-  Preview any bootstrap first by replacing --no-secret-values with --plan.
+  $OUT/repository.sec.asc       → PACKAGES_REPO_SIGNING_KEY      (packages-porta-codes-repo-signing)
+  $OUT/kioskd-rpm.sec.asc       → KIOSKD_RPM_SIGNING_KEY         (kioskd-rpm-signing)
+  $OUT/corpus-rpm.sec.asc       → CORPUS_RPM_SIGNING_KEY         (corpus-rpm-signing)
+  $OUT/keysprout-rpm.sec.asc    → KEYSPROUT_RPM_SIGNING_KEY      (keysprout-rpm-signing)
+  $OUT/corpus-release.pem       → CORPUS_RELEASE_SIGNING_KEY     (corpus-release-signing)
+  $OUT/keysprout-release.pem    → KEYSPROUT_RELEASE_SIGNING_KEY  (keysprout-release-signing)
 
 When every secret is pasted and verified by a dry workflow run: shred $OUT
   (rm -P on macOS, shred -u on Linux). Keep no other copy.
