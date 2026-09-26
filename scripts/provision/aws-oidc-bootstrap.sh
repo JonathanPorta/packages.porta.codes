@@ -164,7 +164,7 @@ check_perms() {
   }
 }
 
-canon() { jq -cS '.Statement |= sort_by(.Sid // "")' <<<"$1"; }
+canon() { jq -cS 'if (.Statement | type) == "array" then .Statement |= sort_by(.Sid // "") else . end' <<<"$1"; }
 
 # aws_read OUTVAR -- aws ARGS… → 0 found (stdout in OUTVAR), 3 NoSuchEntity.
 # ANY other error (AccessDenied above all) stops the run: an unreadable object
@@ -190,6 +190,11 @@ render() { sed "s/<ACCOUNT_ID>/$ACCOUNT/g" "$ROOT/$1"; }
 
 # ── offline self-test ──────────────────────────────────────────────────────
 if [ "$mode" = self-test ]; then
+  # IAM accepts only tab/newline/CR, printable ASCII and Latin-1 in a role or
+  # policy description; a typographic dash failed the live CreateRole.
+  if LC_ALL=C grep -- '--description' "$0" | LC_ALL=C grep -q '[^[:print:][:space:]]'; then
+    fail "an IAM --description contains a character IAM rejects"
+  else pass "every IAM --description is plain ASCII"; fi
   P="arn:aws:iam::111122223333:oidc-provider/$PROVIDER_HOST"
   S="repo:o@1/r@2:environment:infrastructure"
   good="$(trust_doc "$P" "$S")"
@@ -414,7 +419,7 @@ ensure_role() { # $1 role, $2 environment, $3 permissions file or -, $4 boundary
     if [ "$mode" = apply ]; then
       aws iam create-role --role-name "$role" --assume-role-policy-document "$trust" \
         --permissions-boundary "$(boundary_arn "$role")" --max-session-duration "$MAX_SESSION" \
-        --description "packages.porta.codes — GitHub OIDC, Environment $2 only (bootstrap-owned)" >/dev/null
+        --description "packages.porta.codes: GitHub OIDC, Environment $2 only (bootstrap-owned)" >/dev/null
       say "  created role $role"
     else say "  would create role $role (trust: $sub)"; fi
   else
@@ -445,7 +450,13 @@ ensure_role() { # $1 role, $2 environment, $3 permissions file or -, $4 boundary
     cur='{}' rc=0
     if [ "$mode" = apply ] || aws iam get-role --role-name "$role" >/dev/null 2>&1; then
       aws_read cur -- iam get-role-policy --role-name "$role" --policy-name permissions --query PolicyDocument --output json || rc=$?
-      [ "$rc" -eq 0 ] || cur='{}'
+      # Only "no such policy" means empty; any other read failure stops here
+      # rather than being taken for an empty current state.
+      case "$rc" in
+        0) ;;
+        3) cur='{}' ;;
+        *) die "cannot read the inline permissions of $role" ;;
+      esac
     fi
     if [ "$(canon "$cur")" != "$(canon "$doc")" ]; then
       if [ "$mode" = apply ]; then
