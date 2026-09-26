@@ -305,7 +305,13 @@ env_ok() { # $1 environment → 0 iff exists, exactly branch main, no AWS_* secr
     fail "Environment $e deployment branch policies are UNOBSERVABLE or incomplete — refusing to trust it"
     return 1
   fi
-  names="$(jq -r '[.[] | "\(.type // "branch"):\(.name)"] | sort | join(",")' <<<"$names")"
+  # Every member must be well-formed; a jq failure is UNOBSERVABLE, never a result.
+  if ! names="$(jq -er 'if all(.[]; type == "object" and (.name | type) == "string" and (.name | length) > 0
+                              and ((.type // "branch") | IN("branch", "tag")))
+                        then [.[] | "\(.type // "branch"):\(.name)"] | sort | join(",") else error("malformed") end' <<<"$names" 2>/dev/null)"; then
+    fail "Environment $e deployment branch policies are malformed — refusing to trust it"
+    return 1
+  fi
   [ "$names" = "branch:main" ] || {
     fail "Environment $e may deploy from '$names', not exactly branch main"
     bad=1
@@ -314,10 +320,25 @@ env_ok() { # $1 environment → 0 iff exists, exactly branch main, no AWS_* secr
     fail "Environment $e secret inventory is UNOBSERVABLE or incomplete — refusing to trust it"
     return 1
   fi
-  if jq -e 'any(.[]; (.name | ascii_downcase | startswith("aws_")))' <<<"$secrets" >/dev/null; then
-    fail "Environment $e holds an AWS_* secret"
-    bad=1
+  # Tri-state: a valid negative ("clean") is distinct from an evaluation failure.
+  local verdict
+  if ! verdict="$(jq -er 'if all(.[]; type == "object" and (.name | type) == "string" and (.name | length) > 0)
+                          then (if any(.[]; .name | ascii_downcase | startswith("aws_")) then "aws" else "clean" end)
+                          else error("malformed") end' <<<"$secrets" 2>/dev/null)"; then
+    fail "Environment $e secret inventory is malformed — refusing to trust it"
+    return 1
   fi
+  case "$verdict" in
+    clean) ;;
+    aws)
+      fail "Environment $e holds an AWS_* secret"
+      bad=1
+      ;;
+    *)
+      fail "Environment $e secret inventory is UNOBSERVABLE — refusing to trust it"
+      return 1
+      ;;
+  esac
   [ "$bad" -eq 0 ] && pass "Environment $e: exactly branch main, no AWS secret (complete inventory)"
   return "$bad"
 }

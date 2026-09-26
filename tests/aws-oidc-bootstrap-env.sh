@@ -76,6 +76,12 @@ case "$s:$tail" in
   secretsnotjson:/secrets) printf '%s' '<html>oops</html>' | body ;;
   secretspartial:/secrets) printf '%s' '[{"total_count":3,"secrets":[{"name":"A"}]}]' | body ;;
   secretslaterpage:/secrets) printf '%s' '[{"total_count":2,"secrets":[{"name":"FOO"}]},{"total_count":2,"secrets":[{"name":"aws_secret_access_key"}]}]' | body ;;
+  secretsemptyitem:/secrets) printf '%s' '[{"total_count":1,"secrets":[{}]}]' | body ;;
+  secretsnullname:/secrets) printf '%s' '[{"total_count":1,"secrets":[{"name":null}]}]' | body ;;
+  secretsnumname:/secrets) printf '%s' '[{"total_count":1,"secrets":[{"name":7}]}]' | body ;;
+  secretsstringitem:/secrets) printf '%s' '[{"total_count":1,"secrets":["AWS_SECRET_ACCESS_KEY"]}]' | body ;;
+  secretsordinary:/secrets) printf '%s' '[{"total_count":1,"secrets":[{"name":"BWS_ACCESS_TOKEN"}]}]' | body ;;
+  branchesnullname:/deployment-branch-policies) printf '%s' '[{"total_count":1,"branch_policies":[{"name":null,"type":"branch"}]}]' | body ;;
   branches403:/deployment-branch-policies) echo "gh: Forbidden (HTTP 403)" >&2; exit 1 ;;
   brancheslaterpage:/deployment-branch-policies) printf '%s' '[{"total_count":2,"branch_policies":[{"name":"main","type":"branch"}]},{"total_count":2,"branch_policies":[{"name":"release/*","type":"branch"}]}]' | body ;;
   branchesmissing:/deployment-branch-policies) printf '%s' '[{"total_count":1}]' | body ;;
@@ -118,6 +124,11 @@ refuse secretsmalformed "secret inventory is UNOBSERVABLE" "a secret inventory w
 refuse secretsnotjson "secret inventory is UNOBSERVABLE" "a secret inventory that is not JSON"
 refuse secretspartial "secret inventory is UNOBSERVABLE" "a secret inventory shorter than its total_count"
 refuse secretslaterpage "holds an AWS_* secret" "an AWS secret on a LATER page"
+refuse secretsemptyitem "secret inventory is malformed" "a secret entry with no name"
+refuse secretsnullname "secret inventory is malformed" "a secret entry whose name is null"
+refuse secretsnumname "secret inventory is malformed" "a secret entry whose name is not a string"
+refuse secretsstringitem "secret inventory is malformed" "a secret entry that is not an object"
+refuse branchesnullname "branch policies are malformed" "a branch policy whose name is null"
 refuse branches403 "branch policies are UNOBSERVABLE" "branch policies that fail with 403"
 refuse branchesmissing "branch policies are UNOBSERVABLE" "branch policies without their collection"
 refuse brancheslaterpage "not exactly branch main" "an extra branch on a LATER page"
@@ -128,6 +139,13 @@ if grep -q 'create-role --role-name packages-porta-codes-terraform-plan' "$W/aws
   ok "valid empty secrets + exactly branch main: the role is created"
 else
   no "a valid inventory did not proceed"
+  printf '%s\n' "$out" | grep -E 'FAIL' | head -4 | sed 's/^/      /'
+fi
+out="$(run secretsordinary)"
+if grep -q 'create-role --role-name packages-porta-codes-terraform-plan' "$W/aws.log"; then
+  ok "an ordinary non-AWS secret (BWS_ACCESS_TOKEN): the role is created"
+else
+  no "an ordinary secret blocked the role"
   printf '%s\n' "$out" | grep -E 'FAIL' | head -4 | sed 's/^/      /'
 fi
 echo "aws-oidc-bootstrap-env: $pass passed, $fail failed"
