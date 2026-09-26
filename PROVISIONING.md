@@ -161,6 +161,12 @@ In the web vault for row 0: machine account **`packages-porta-codes-ci`** gets
 `CLOUDFLARE_ACCOUNT_ID`) and nothing else; its token goes to the bootstrapper's
 hidden prompt, which stores it as the **repository** secret `BWS_ACCESS_TOKEN`;
 the secret `CLOUDFLARE_API_TOKEN` in `packages-porta-codes` gets the §3b token.
+`CLOUDFLARE_ACCOUNT_ID` is **not** created or filled here: it is a `shared`
+key whose value lives in `_shared-ci`, and the loader already carries its
+canonical `_shared-ci` id (`6c68ee9e-…`, the same id every static site's loader
+carries — `scripts/bws/bootstrap.sh` `shared_uuid_for`). Re-run (b) once the
+secret exists: it fills only the `CLOUDFLARE_API_TOKEN` line. Then **stop at
+the checkpoint below**.
 For row 0 the bootstrapper's `Cloudflare token packages-porta-codes-ci` summary
 line is just its suggested token name — the §3b name is fine.
 
@@ -201,8 +207,31 @@ Cloudflare token. Do exactly these in the Bitwarden web vault:
 
 Then re-run (b) once more: it finds the secret and fills the placeholder UUIDs
 in `.bws/<domain>.env` and in this domain's line of
-`.github/actions/load-secrets/action.yml`. **Leave those edits uncommitted** (they
-hold IDs, not secrets); I review and open the PR for them.
+`.github/actions/load-secrets/action.yml`. Then **stop at the checkpoint**.
+
+### The checkpoint — after EVERY row, before the next row in the same repository
+
+Several domains share one loader file: rows 0, 1 and 2 (packages.porta.codes),
+rows 4 and 5 (corpus), rows 6 and 7 (keysprout). The bootstrapper refuses to
+edit a loader that has uncommitted changes, so running the next row on top of
+the previous row's uncommitted fill would leave the next UUID unfilled. So,
+after each row:
+
+1. **You stop** and tell me "row N done". Leave the fill (IDs only — no
+   secret) uncommitted in that clone.
+2. **I** commit exactly `.github/actions/load-secrets/action.yml` and that
+   row's `.bws/<domain>.env` (or `.env-sample` for row 0) from your clone onto
+   its `jp/c/bws-<domain>` branch, open the PR, take it through review and
+   merge it.
+3. **You** start the next row of that repository from a clean, updated main:
+   `git switch main && git pull --ff-only` (the row's own command then creates
+   the next branch).
+
+Rows in different repositories do not share a loader and may run in any order
+between checkpoints. `tests/bws-loader-bootstrap.sh` walks rows 0–2 through the
+real bootstrapper with recording fakes: without the checkpoint the next row
+refuses to edit the loader; with it, every row fills its own line and leaves
+the others intact.
 
 | # | Directory | `<domain>` | `<project>` (machine account `<project>-ci`) | `<environment>` | `<secret>` ← value |
 |---|---|---|---|---|---|

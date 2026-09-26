@@ -64,6 +64,8 @@ check: verify-scripts validate ## Static checks: scripts, workflows, Terraform, 
 	actionlint
 	terraform fmt -check -recursive
 	bash scripts/provision/aws-oidc-bootstrap.sh --self-test
+	bash tests/aws-oidc-bootstrap-env.sh
+	bash tests/bws-loader-bootstrap.sh
 	@if [ -d .terraform ]; then terraform validate; else echo "terraform validate: skipped (run terraform init with backend access first)"; fi
 
 # Internal (called by check): release-surfaces.yaml and, when present, the inventory.

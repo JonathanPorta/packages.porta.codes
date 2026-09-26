@@ -267,27 +267,58 @@ fi
 PREFIX="$(jq -r .sub_claim_prefix "$SUBJECT_FILE")"
 
 say "== GitHub Environments (read back BEFORE AWS trusts them)"
-env_ok() { # $1 environment → 0 iff exists, exactly branch main, no AWS_* secret
-  local e="$1" pol names bad=0
-  if ! gh api "repos/$REPO/environments/$e" >/dev/null 2>&1; then
-    fail "Environment $e does not exist"
+# Environment evidence must be COMPLETE and OBSERVED, or AWS trusts nothing.
+# A failed or partial read is never taken for an empty one: every collection is
+# read with --paginate --slurp, each page must carry the collection and a
+# total_count, all pages must agree on that count, and the items seen must add
+# up to it. Anything else — 403/5xx/transport, a malformed or missing
+# collection, a short page set — is UNOBSERVABLE and refuses that role.
+gh_pages() { # $1 path, $2 collection key → the concatenated items (JSON array); rc 1 unobservable
+  local raw
+  raw="$(gh api --paginate --slurp "$1" 2>/dev/null)" || return 1
+  jq -ce --arg k "$2" '
+    if type == "array" and length > 0
+       and all(.[]; type == "object" and (.[$k] | type) == "array" and (.total_count | type) == "number")
+       and ([.[].total_count] | unique | length) == 1
+       and ([.[][$k][]] | length) == .[0].total_count
+    then [.[][$k][]] else error("incomplete") end' <<<"$raw" 2>/dev/null
+}
+env_ok() { # $1 environment → 0 iff exists, exactly branch main, no AWS_* secret — all observed
+  local e="$1" out rc=0 pol names secrets bad=0
+  out="$(gh api "repos/$REPO/environments/$e" 2>&1)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    case "$out" in
+      *"HTTP 404"* | *"Not Found"*) fail "Environment $e does not exist" ;;
+      *) fail "Environment $e is UNOBSERVABLE (read failed) — refusing to trust it" ;;
+    esac
     return 1
   fi
-  pol="$(gh api "repos/$REPO/environments/$e" --jq '.deployment_branch_policy | tostring')"
+  if ! pol="$(jq -ce '.deployment_branch_policy | select(type == "object") | {custom_branch_policies, protected_branches}' <<<"$out" 2>/dev/null)"; then
+    fail "Environment $e has no readable deployment policy — refusing to trust it"
+    return 1
+  fi
   [ "$pol" = '{"custom_branch_policies":true,"protected_branches":false}' ] || {
     fail "Environment $e deployment policy is $pol, not custom branch policies"
     bad=1
   }
-  names="$(gh api "repos/$REPO/environments/$e/deployment-branch-policies" --jq '[.branch_policies[] | "\(.type):\(.name)"] | sort | join(",")')"
+  if ! names="$(gh_pages "repos/$REPO/environments/$e/deployment-branch-policies" branch_policies)"; then
+    fail "Environment $e deployment branch policies are UNOBSERVABLE or incomplete — refusing to trust it"
+    return 1
+  fi
+  names="$(jq -r '[.[] | "\(.type // "branch"):\(.name)"] | sort | join(",")' <<<"$names")"
   [ "$names" = "branch:main" ] || {
     fail "Environment $e may deploy from '$names', not exactly branch main"
     bad=1
   }
-  if gh api "repos/$REPO/environments/$e/secrets" --jq '.secrets[].name' 2>/dev/null | grep -qi '^aws_'; then
+  if ! secrets="$(gh_pages "repos/$REPO/environments/$e/secrets" secrets)"; then
+    fail "Environment $e secret inventory is UNOBSERVABLE or incomplete — refusing to trust it"
+    return 1
+  fi
+  if jq -e 'any(.[]; (.name | ascii_downcase | startswith("aws_")))' <<<"$secrets" >/dev/null; then
     fail "Environment $e holds an AWS_* secret"
     bad=1
   fi
-  [ "$bad" -eq 0 ] && pass "Environment $e: exactly branch main, no AWS secret"
+  [ "$bad" -eq 0 ] && pass "Environment $e: exactly branch main, no AWS secret (complete inventory)"
   return "$bad"
 }
 env_fail=""
