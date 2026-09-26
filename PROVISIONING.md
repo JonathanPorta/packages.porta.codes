@@ -101,7 +101,7 @@ I commit the public halves and fingerprints.
 
 | File in `$KEYS` | Becomes secret | In BWS project |
 |---|---|---|
-| `repository.sec.asc` | `PACKAGES_REPO_SIGNING_KEY` | `packages.porta.codes-repo-signing` |
+| `repository.sec.asc` | `PACKAGES_REPO_SIGNING_KEY` | `packages-porta-codes-repo-signing` |
 | `kioskd-rpm.sec.asc` | `KIOSKD_RPM_SIGNING_KEY` | `kioskd-rpm-signing` |
 | `corpus-rpm.sec.asc` | `CORPUS_RPM_SIGNING_KEY` | `corpus-rpm-signing` |
 | `keysprout-rpm.sec.asc` | `KEYSPROUT_RPM_SIGNING_KEY` | `keysprout-rpm-signing` |
@@ -117,7 +117,7 @@ github.com → Settings → Developer settings → Fine-grained tokens → Gener
 - Name `packages-porta-codes-candidate-read`; Resource owner **JonathanPorta**;
   Expiration **180 days** (put the date in your calendar; renewal is
   `--rotate-secret PACKAGES_CANDIDATE_READ_TOKEN --no-secret-values` in the
-  `packages.porta.codes-candidate-ingest` domain).
+  `packages-porta-codes-candidate-ingest` domain).
 - Repository access: **Only select repositories** → `JonathanPorta/kioskd`,
   `JonathanPorta/corpus`, `JonathanPorta/keysprout`.
 - Repository permissions: **Contents: Read-only** (Metadata: Read-only is
@@ -235,8 +235,8 @@ the others intact.
 
 | # | Directory | `<domain>` | `<project>` (machine account `<project>-ci`) | `<environment>` | `<secret>` ← value |
 |---|---|---|---|---|---|
-| 1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages.porta.codes-repo-signing` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` ← `$KEYS/repository.sec.asc` |
-| 2 | `/Users/portaj/devel/portaj/packages.porta.codes` | `candidate-ingest` | `packages.porta.codes-candidate-ingest` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` ← the §3 PAT |
+| 1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages-porta-codes-repo-signing` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` ← `$KEYS/repository.sec.asc` |
+| 2 | `/Users/portaj/devel/portaj/packages.porta.codes` | `candidate-ingest` | `packages-porta-codes-candidate-ingest` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` ← the §3 PAT |
 | 3 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `rpm-signing` | `KIOSKD_RPM_SIGNING_KEY` ← `$KEYS/kioskd-rpm.sec.asc` |
 | 4 | `/Users/portaj/devel/portaj/corpus` | `rpm-signing` | `corpus-rpm-signing` | `rpm-signing` | `CORPUS_RPM_SIGNING_KEY` ← `$KEYS/corpus-rpm.sec.asc` |
 | 5 | `/Users/portaj/devel/portaj/corpus` | `release-signing` | `corpus-release-signing` | `release-signing` | `CORPUS_RELEASE_SIGNING_KEY` ← `$KEYS/corpus-release.pem` |

@@ -173,8 +173,8 @@ existing key.
 |---|---|---|---|
 | kioskd candidate signing key (Ed25519, key id `kioskitd-2026-01`, secret `RELEASE_SIGNING_KEY`) | **EXISTING — reused as is** | kioskd's existing BWS project and loader; its public half is already this repo's `keys/candidates/kioskd.json` (from kioskd `release-trusted-keys.json` @ 22b40ae) | unchanged |
 | keysprout `RELEASE_TOKEN` | existing, unrelated | untouched | unchanged |
-| Repository metadata key (OpenPGP RSA 4096) | NEW | BWS project `packages.porta.codes-repo-signing`, Environment `repository-signing` | `packages.porta.codes-repo-signing-ci` |
-| Candidate read token (fine-grained PAT: **Contents: read** on kioskd, corpus, keysprout; nothing else) | NEW (created in the GitHub UI) | BWS project `packages.porta.codes-candidate-ingest`, Environment `candidate-ingest` | `packages.porta.codes-candidate-ingest-ci` |
+| Repository metadata key (OpenPGP RSA 4096) | NEW | BWS project `packages-porta-codes-repo-signing`, Environment `repository-signing` | `packages-porta-codes-repo-signing-ci` |
+| Candidate read token (fine-grained PAT: **Contents: read** on kioskd, corpus, keysprout; nothing else) | NEW (created in the GitHub UI) | BWS project `packages-porta-codes-candidate-ingest`, Environment `candidate-ingest` | `packages-porta-codes-candidate-ingest-ci` |
 | kioskd RPM signing key (OpenPGP RSA 4096; LP-9) | NEW — kioskd has no RPM key today | kioskd: BWS project `kioskd-rpm-signing`, Environment `rpm-signing` | `kioskd-rpm-signing-ci` |
 | corpus RPM signing key | NEW | corpus: `corpus-rpm-signing`, Environment `rpm-signing` | `corpus-rpm-signing-ci` |
 | keysprout RPM signing key | NEW | keysprout: `keysprout-rpm-signing`, Environment `rpm-signing` | `keysprout-rpm-signing-ci` |
@@ -216,8 +216,8 @@ Plan, with no new credential:
    of the review they already give. Record whether the resulting `CI` check
    satisfies the ruleset.
 3. Only if (2) does not satisfy the ruleset in practice, request one more
-   authority domain — `packages.porta.codes-admission-pr` with machine account
-   `packages.porta.codes-admission-pr-ci`, holding a fine-grained PAT (or App
+   authority domain — `packages-porta-codes-admission-pr` with machine account
+   `packages-porta-codes-admission-pr-ci`, holding a fine-grained PAT (or App
    token) limited to **Pull requests: write** and **Contents: write** on this
    repository only — so the PR is opened by an identity whose events start CI.
    That request comes with the evidence from (1) and (2); it is not part of this
