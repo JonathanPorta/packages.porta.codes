@@ -1,0 +1,68 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListOnlyThisStacksState",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::deployments-state",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "terraform-state/packages.porta.codes*"
+        }
+      }
+    },
+    {
+      "Sid": "ReadThisStacksState",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::deployments-state/terraform-state/packages.porta.codes"
+    },
+    {
+      "Sid": "ReadTheBucketConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:Get*",
+        "s3:List*"
+      ],
+      "Resource": "arn:aws:s3:::packages.porta.codes"
+    },
+    {
+      "Sid": "ReadTheSiteObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectAcl",
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::packages.porta.codes/index.html"
+    },
+    {
+      "Sid": "ReadTheGitHubOIDCProvider",
+      "Effect": "Allow",
+      "Action": "iam:GetOpenIDConnectProvider",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "ReadTheAdoptedRoles",
+      "Effect": "Allow",
+      "Action": "iam:GetRole",
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-publisher",
+        "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-terraform-plan",
+        "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-terraform-apply"
+      ]
+    },
+    {
+      "Sid": "ReadThePublishersInlinePolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/packages-porta-codes-publisher"
+    }
+  ]
+}

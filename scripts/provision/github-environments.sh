@@ -3,7 +3,12 @@
 # domain in the pilot, each allowed ONLY the ref its trusted workflow runs on.
 #
 #   JonathanPorta/packages.porta.codes  repository-signing, candidate-ingest,
-#                                       repository-publication        → branch main
+#                                       repository-publication,
+#                                       infrastructure-plan,
+#                                       infrastructure                → branch main
+#   (infrastructure-plan / infrastructure are the Environments the Terraform
+#   OIDC roles trust; aws-oidc-bootstrap.sh reads them back BEFORE any role
+#   trusts them — blessed-cicd #9 ordering.)
 #   JonathanPorta/kioskd                rpm-signing                   → tag v* ONLY
 #                                       (kioskd's release.yml runs on v* tag pushes;
 #                                       no branch may deploy to it. The signing job
@@ -25,6 +30,8 @@ ROWS=(
   "JonathanPorta/packages.porta.codes repository-signing branch main"
   "JonathanPorta/packages.porta.codes candidate-ingest branch main"
   "JonathanPorta/packages.porta.codes repository-publication branch main"
+  "JonathanPorta/packages.porta.codes infrastructure-plan branch main"
+  "JonathanPorta/packages.porta.codes infrastructure branch main"
   "JonathanPorta/kioskd rpm-signing tag v*"
   "JonathanPorta/corpus rpm-signing branch main"
   "JonathanPorta/corpus release-signing branch main"

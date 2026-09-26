@@ -105,13 +105,17 @@ existing) and the ordered steps — is **[`APPROVAL.md`](APPROVAL.md)**. In shor
    `porta.codes`) and a new repository `JonathanPorta/packages.porta.codes`
    owning it.
 2. **Infrastructure and spend** — one S3 website bucket + Cloudflare proxied
-   CNAME via `s3-static-site` 1.5.0 and one read-only router Worker
-   (`make plan TF_WORKSPACE=production`, then `make deploy`); itemized in
-   `APPROVAL.md`. Plus the IAM role `packages-porta-codes-publisher`, created
-   by Terraform in the reviewed plan, trusting only
-   `repo:JonathanPorta/packages.porta.codes:environment:repository-publication`;
-   set repository variables `AWS_ACCOUNT_ID` and `AWS_REGION`.
-3. **Credential authority** — create the keys and authority domains below.
+   CNAME via `s3-static-site` 1.5.0 and one read-only router Worker; itemized
+   in `APPROVAL.md`. Terraform runs only in CI: dispatch **Terraform plan** on
+   `main`, review its artifact, dispatch **Terraform apply** with that run id.
+3. **AWS authority — GitHub OIDC only** (blessed-cicd #9): no AWS key exists.
+   Three bootstrap-owned roles (#239) — `…-terraform-plan` (read-only),
+   `…-terraform-apply` (this stack), `…-publisher` — each trusting one exact
+   immutable-ID subject `repo:JonathanPorta@1451007/packages.porta.codes@1389054623:environment:<env>`;
+   created and verified by `scripts/provision/aws-oidc-bootstrap.sh` under the
+   operator's SSO identity. Terraform only adopts them.
+4. **Credential authority** — create the keys and BWS domains below (BWS holds
+   Cloudflare, signing keys and the candidate read token — never AWS).
 
 ## Provisioning (one time, after the decisions)
 
@@ -133,9 +137,10 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
 
    | Domain | BWS project / machine account | Environment | Secret |
    |---|---|---|---|
+   | default (Cloudflare only) | `packages-porta-codes` / `packages-porta-codes-ci` | repository-level token | `CLOUDFLARE_API_TOKEN` (+ shared `CLOUDFLARE_ACCOUNT_ID`) |
    | repository signing | `packages-porta-codes-repo-signing` / `…-ci` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` (armored private key) |
    | candidate ingest | `packages-porta-codes-candidate-ingest` / `…-ci` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` (fine-grained PAT, Contents: read on kioskd, corpus, keysprout) |
-   | publication | none — GitHub OIDC | `repository-publication` | — |
+   | publication, Terraform plan/apply | none — GitHub OIDC | `repository-publication`, `infrastructure-plan`, `infrastructure` | — |
    | producer RPM signing (in each producer) | `<repo>-rpm-signing` / `…-ci` | per producer | `<REPO>_RPM_SIGNING_KEY` |
    | producer candidate signing (corpus, keysprout) | `<repo>-release-signing` / `…-ci` | per producer | `<REPO>_RELEASE_SIGNING_KEY` |
 
@@ -144,8 +149,12 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
    `secret_authorities`. Its lines carry placeholder UUIDs until the
    bootstrapper fills them; every workflow refuses to run while its domain's
    line does.
-5. `make plan TF_WORKSPACE=production`, review `plan.out`, `make deploy`.
-6. Admit the first candidates, merge, and watch **Publish**.
+5. `scripts/provision/aws-oidc-bootstrap.sh` (`--plan`, `--apply`, `--verify`)
+   with the operator's SSO profile: Environments read back first, then the
+   three roles, their trust and boundaries.
+6. Dispatch **Terraform plan**; review the artifact; dispatch **Terraform
+   apply** with that run id; `make verify-edge`.
+7. Admit the first candidates, merge, and watch **Publish**.
 
 ## Development
 

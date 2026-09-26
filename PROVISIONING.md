@@ -1,4 +1,4 @@
-# Provisioning walkthrough — signing and ingestion authority
+# Provisioning walkthrough — Cloudflare, signing, ingestion and AWS OIDC authority
 
 The owner follows this verbatim, once, after the preconditions in §0 are done.
 Every command below was checked against the vendored bootstrapper
@@ -10,6 +10,11 @@ arguments.** Every secret VALUE is pasted in exactly one place: the Bitwarden
 web vault (Secrets Manager → project → secret). The only other secret input is
 a machine-account access token, typed at the bootstrapper's **hidden** prompt,
 which pipes it to `gh secret set` over stdin. No step prints a secret.
+
+**No AWS key is created anywhere** (blessed-cicd #9): every AWS call is a
+GitHub OIDC role session. BWS holds only Cloudflare (the default domain),
+signing keys and the candidate read token. The three AWS roles are
+bootstrap-owned (§8; #239).
 
 Existing identities are kept: kioskd's candidate signing key
 (`RELEASE_SIGNING_KEY`, BWS project `kioskd`, its repository-level
@@ -29,6 +34,8 @@ other existing credential are **not touched**. Nothing here rotates anything.
   | packages.porta.codes | `repository-signing` | branch `main` | publish runs on merge to main |
   | packages.porta.codes | `candidate-ingest` | branch `main` | admission/publish run from main |
   | packages.porta.codes | `repository-publication` | branch `main` | AWS OIDC role is bound to this Environment |
+  | packages.porta.codes | `infrastructure-plan` | branch `main` | the read-only Terraform plan role trusts only this Environment |
+  | packages.porta.codes | `infrastructure` | branch `main` | the Terraform apply role trusts only this Environment |
   | kioskd | `rpm-signing` | **tag `v*` only** | kioskd's `release.yml` runs on `v*` tag pushes; its signing job also asserts the tagged commit is an ancestor of `origin/main` |
   | corpus | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main |
   | keysprout | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main (and dispatch from main) |
@@ -43,6 +50,7 @@ other existing credential are **not touched**. Nothing here rotates anything.
 
   | Repository | Domain → loader profile | Secret |
   |---|---|---|
+  | packages.porta.codes | `default` (`.bws-secrets-list`, `.env-sample`) | `CLOUDFLARE_API_TOKEN` (+ shared `CLOUDFLARE_ACCOUNT_ID`) |
   | packages.porta.codes | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` |
   | packages.porta.codes | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` |
   | kioskd | `rpm-signing` | `KIOSKD_RPM_SIGNING_KEY` |
@@ -59,6 +67,13 @@ other existing credential are **not touched**. Nothing here rotates anything.
 - Tools: `bws` CLI (2.0.0 is installed), `gh` ≥ 2.40 logged in as
   JonathanPorta with the `repo` scope (it is; `gh auth status`), `jq`, `gpg`
   (2.5.20 installed), `openssl` 3.x (3.6.3 installed).
+- AWS (for §8 only): the AWS CLI v2 and an IAM Identity Center profile whose
+  permission set can administer IAM roles and policies. **`portaj` today signs
+  in as `PowerUserAccess`, which has no IAM rights** (verified 2026-09-26: it is
+  denied even `iam:GetOpenIDConnectProvider`), so §8 needs a profile on an
+  IAM-capable permission set (e.g. `AdministratorAccess`). When I ask, run
+  `aws sso login --profile <that profile>` — a browser sign-in; nothing is
+  pasted anywhere. No AWS access key is created.
 - Bitwarden: an account that can create Secrets Manager projects and machine
   accounts in the organization, and an **admin/org access token** for the
   bootstrapper (Secrets Manager → Machine accounts → your admin account →
@@ -111,7 +126,45 @@ github.com → Settings → Developer settings → Fine-grained tokens → Gener
 Copy it straight into the Bitwarden web vault in §4 (row 2); do not store it
 anywhere else.
 
-## 4. One authority domain at a time (7 domains)
+## 3b. The Cloudflare token (Cloudflare dashboard)
+
+dash.cloudflare.com → My Profile → API Tokens → Create Token → **Custom token**:
+
+- Name `packages-porta-codes-terraform`.
+- Permissions: **Account → Workers Scripts → Edit**; **Zone → Workers Routes →
+  Edit**; **Zone → DNS → Edit**; **Zone → Zone → Read**.
+- Account resources: the account that owns `porta.codes` only. Zone
+  resources: **Specific zone → `porta.codes`** only. No IP filter needed; TTL
+  optional (put any expiry date in your calendar).
+
+Copy it straight into the Bitwarden web vault in §4 (row 0); do not store it
+anywhere else. `CLOUDFLARE_ACCOUNT_ID` already exists in `_shared-ci`; nothing
+to do for it.
+
+## 4. One authority domain at a time (1 default + 7 domains)
+
+**Row 0 — the default domain (Cloudflare only), in
+`/Users/portaj/devel/portaj/packages.porta.codes`.** Its token is the one
+**repository-level** `BWS_ACCESS_TOKEN` (secrets.bwsm-authority-domains@1), so
+it takes no `--gh-environments` and uses the default `.bws-secrets-list` and
+`.env-sample`:
+
+```sh
+cd /Users/portaj/devel/portaj/packages.porta.codes
+git switch main && git pull --ff-only && git switch -c jp/c/bws-default
+make bws-bootstrap ARGS="--plan"               # (a) preview: project packages-porta-codes, machine account packages-porta-codes-ci
+make bws-bootstrap ARGS="--no-secret-values"   # (b) create
+```
+
+In the web vault for row 0: machine account **`packages-porta-codes-ci`** gets
+**Can read** on `packages-porta-codes` **and** on `_shared-ci` (for the shared
+`CLOUDFLARE_ACCOUNT_ID`) and nothing else; its token goes to the bootstrapper's
+hidden prompt, which stores it as the **repository** secret `BWS_ACCESS_TOKEN`;
+the secret `CLOUDFLARE_API_TOKEN` in `packages-porta-codes` gets the §3b token.
+For row 0 the bootstrapper's `Cloudflare token packages-porta-codes-ci` summary
+line is just its suggested token name — the §3b name is fine.
+
+**Rows 1–7 — Environment-scoped domains.**
 
 For **each row**, in the listed directory:
 
@@ -132,8 +185,8 @@ make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
 (b) creates the BWS project `<project>`, then prints the web-UI steps for the
 machine account. Its summary always includes a line `Cloudflare token
 <project>-ci`: that is only the name it would suggest for a Cloudflare token.
-These domains declare no Cloudflare secret, so ignore it; create no Cloudflare
-token. Do exactly these in the Bitwarden web vault:
+Rows 1–7 declare no Cloudflare secret, so ignore it there; create no other
+Cloudflare token. Do exactly these in the Bitwarden web vault:
 
 1. Secrets Manager → Machine accounts → New → name **`<project>-ci`**.
 2. Projects tab of that machine account → add **only** `<project>` with
@@ -164,9 +217,10 @@ hold IDs, not secrets); I review and open the PR for them.
 The producers' `scripts/bws/bootstrap.sh` must be the 1.9.1 category (the
 declaration PRs re-sync it where older; `--gh-environments` needs it).
 
-Nothing in this walkthrough creates or edits `BWS_ACCESS_TOKEN` at repository
-level, the `kioskd` / `corpus` / `keysprout` existing BWS projects, or any
-existing secret.
+Only row 0 sets a repository-level `BWS_ACCESS_TOKEN`, and only in
+packages.porta.codes (which has none today). Nothing here touches the `kioskd`
+/ `corpus` / `keysprout` repository-level tokens, their existing BWS projects,
+or any existing secret.
 
 ## 5. Verification (metadata only)
 
@@ -174,8 +228,10 @@ In each directory, per row, the read-only inventory — it reads project and
 secret NAMES and GitHub secret NAMES, never a value:
 
 ```sh
+make bws-bootstrap ARGS="--plan"                                                    # row 0
+gh secret list --repo JonathanPorta/packages.porta.codes                            # expect: BWS_ACCESS_TOKEN (and no AWS_*)
 make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
-  --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"
+  --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"        # rows 1–7
 gh api repos/JonathanPorta/<repo>/environments/<environment>/secrets --jq '.secrets[].name'   # expect: BWS_ACCESS_TOKEN
 ```
 
@@ -209,3 +265,55 @@ used as proof.
    the standing review step for admission PRs.
 3. No PR-opening credential exists or is requested unless (2) demonstrably
    fails; if it does, I bring that evidence with a single request.
+
+## 8. AWS: three OIDC roles, bootstrap-owned (I run it with your SSO session)
+
+No AWS key exists for this repository. The roles are created by the
+**operator's identity**, never by one a workflow can reach (#239), with
+`scripts/provision/aws-oidc-bootstrap.sh`. You authorized me to run it as part
+of the approved deployment; the only thing I need from you is a live SSO
+session:
+
+```sh
+aws sso login --profile <IAM-capable profile>   # you: browser sign-in; nothing to paste
+```
+
+(The script refuses, with the AWS error, if the identity cannot read IAM — an
+unreadable object is never treated as absent.)
+
+Then I run, from `/Users/portaj/devel/portaj/packages.porta.codes` on `main`:
+
+```sh
+AWS_PROFILE=<IAM-capable profile> bash scripts/provision/aws-oidc-bootstrap.sh            # --plan (read-only): what would change
+AWS_PROFILE=<IAM-capable profile> bash scripts/provision/aws-oidc-bootstrap.sh --apply    # create/update, then verify
+AWS_PROFILE=<IAM-capable profile> bash scripts/provision/aws-oidc-bootstrap.sh --verify   # read-only PASS/FAIL, any time
+```
+
+In order, it:
+
+1. refuses to run as any managed role (operator identity only);
+2. reads this repository's OIDC subject configuration and requires it to equal
+   `policies/oidc-subject.json` (`use_default: true`, `use_immutable_subject:
+   true`, prefix `repo:JonathanPorta@1451007/packages.porta.codes@1389054623`) —
+   otherwise it trusts nothing;
+3. reads back `infrastructure-plan`, `infrastructure` and
+   `repository-publication`: each must exist, allow exactly branch `main`, and
+   hold no `AWS_*` secret — before any role trusts it;
+4. requires the account-global GitHub OIDC provider by its exact ARN with
+   audience `sts.amazonaws.com` (it exists: docsort.io uses it; it is never
+   created without `--create-provider`);
+5. creates or corrects each role's trust (one exact `StringEquals` subject +
+   `aud`), its boundary `<role>-boundary`, max session 3600 s, and — for plan and
+   apply — its inline `permissions` from `policies/`; the publisher's inline
+   policy is left to Terraform;
+6. sets the repository variables `AWS_ACCOUNT_ID` and `AWS_REGION` (not secrets);
+7. verifies everything from the live APIs and prints PASS/FAIL per condition.
+
+`--self-test` (run by `make check`) proves offline that the checker rejects a
+ref-scoped, wildcard or other-Environment subject, another audience,
+`StringLike`, another provider, a second statement, role chaining, and
+permissions with `iam:PassRole`, `s3:*` or `Resource: *`.
+
+After it passes: I dispatch **Terraform plan** on `main`; you review the
+`terraform-plan` artifact; on your approval I dispatch **Terraform apply** with
+that run id (it refuses unless the plan is of `main`'s current HEAD).

@@ -1,0 +1,130 @@
+name: 🧪 Terraform plan
+
+# The REVIEWABLE plan of this stack (blessed-cicd #9: GitHub OIDC for all AWS
+# access; per-authority roles). Dispatched on `main` only — never on pull
+# request code, which must not run with AWS authority. It assumes the READ-ONLY
+# role packages-porta-codes-terraform-plan (Environment infrastructure-plan,
+# branch main), plans without taking the state lock, and uploads the saved
+# plan, its `terraform show` text and a metadata file binding it to its source
+# SHA. The owner reviews that artifact; terraform-apply.yml applies exactly it.
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: 🧪 plan (read-only role)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: infrastructure-plan
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 🔒 main only
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::plans are made from main only, not $GITHUB_REF"; exit 1; }
+
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: 🚦 Provisioned?
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_REGION_VAR: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          if grep -Eq '^ *00000000-0000-0000-0000-[0-9a-fA-F]{12} > CLOUDFLARE_(API_TOKEN|ACCOUNT_ID)$' .github/actions/load-secrets/action.yml; then
+            echo "::error::the default (Cloudflare) domain is not provisioned (placeholder UUID). See PROVISIONING.md."; exit 1
+          fi
+          if [ -z "$AWS_ACCOUNT_ID" ] || [ -z "$AWS_REGION_VAR" ]; then
+            echo "::error::AWS_ACCOUNT_ID / AWS_REGION are unset: run scripts/provision/aws-oidc-bootstrap.sh --apply first. See PROVISIONING.md."; exit 1
+          fi
+
+      - name: 🔐 Load the Cloudflare credentials (default domain)
+        uses: ./.github/actions/load-secrets
+        with:
+          profile: default
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+
+      - name: 🧹 No ambient AWS credentials
+        run: |
+          set -euo pipefail
+          if env | grep -Eq '^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY|SESSION_TOKEN)='; then
+            echo "::error::static AWS credentials are present before OIDC; refusing"; exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/packages-porta-codes-terraform-plan
+          role-session-name: ppc-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: 🪪 The session is the plan role in the expected account
+        env:
+          EXPECTED_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          id="$(aws sts get-caller-identity --output json)"
+          [ "$(jq -r .Account <<<"$id")" = "$EXPECTED_ACCOUNT" ] || { echo "::error::unexpected account"; exit 1; }
+          case "$(jq -r .Arn <<<"$id")" in
+            "arn:aws:sts::$EXPECTED_ACCOUNT:assumed-role/packages-porta-codes-terraform-plan/"*) echo "assumed $(jq -r .Arn <<<"$id")" ;;
+            *) echo "::error::unexpected role $(jq -r .Arn <<<"$id")"; exit 1 ;;
+          esac
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: 📋 Plan
+        run: make plan
+
+      - name: 🔗 Bind the plan to its source
+        run: |
+          set -euo pipefail
+          jq -n --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg tf "$(terraform version -json | jq -r .terraform_version)" \
+            --arg lock "$(sha256sum .terraform.lock.hcl | cut -d' ' -f1)" \
+            --arg plan "$(sha256sum plan.tmp | cut -d' ' -f1)" \
+            '{schema: "packages.porta.codes/terraform-plan/v1", source_sha: $sha, run_id: $run,
+              run_attempt: $attempt, terraform_version: $tf, lock_sha256: $lock, plan_sha256: $plan}' >plan.meta.json
+          cat plan.meta.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: terraform-plan
+          path: |
+            plan.tmp
+            plan.out
+            plan.meta.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 📝 Summary
+        if: always()
+        run: |
+          {
+            echo "## Terraform plan — source \`$GITHUB_SHA\`, run \`$GITHUB_RUN_ID\`"
+            echo
+            grep -E '^(Plan:|No changes\.)' plan.out 2>/dev/null || echo "(no plan produced)"
+            echo
+            echo "Review the complete \`plan.out\` in the **terraform-plan** artifact, then dispatch"
+            echo "**Terraform apply** on \`main\` with \`plan_run_id=$GITHUB_RUN_ID\`. It refuses unless"
+            echo "\`main\` is still \`$GITHUB_SHA\`."
+            echo
+            echo '<details><summary>plan.out</summary>'
+            echo
+            echo '```'
+            head -c 60000 plan.out 2>/dev/null || true
+            echo '```'
+            echo '</details>'
+          } >>"$GITHUB_STEP_SUMMARY"

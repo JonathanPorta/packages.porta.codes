@@ -7,22 +7,27 @@
 #   makefile.capability-verbs blessed scripts: sync-scripts verify-scripts
 #                             Bitwarden Secrets Manager: bws-bootstrap bws-load
 #
+# There is no RUAM user and no AWS key: every AWS call runs as a GitHub OIDC
+# role session (blessed-cicd #9). The roles are bootstrap-owned
+# (scripts/provision/aws-oidc-bootstrap.sh, operator SSO; #239).
+#
 # This is a superset of the static-site class surface (blessed-cicd
 # templates/Makefile: build check clean deploy dev help plan test verify-edge).
-# `validate`, `tools-image`, `cloudflare-token` and `require-workspace` are
-# internal.
+# `validate` and `tools-image` are internal.
 .DEFAULT_GOAL := help
 SHELL := bash
 
 SCRIPT_CATEGORIES := bws signing release
 OWN_SCRIPTS := $(wildcard scripts/surface/*.sh scripts/provision/*.sh tests/*.sh tests/lib/*.sh tests/fixtures/*.sh) scripts/sync-blessed-scripts.sh
 TOOLS_IMAGE ?= ppc-tools
-# Terraform acts on exactly one declared workspace; nothing is inferred.
-TF_WORKSPACE ?=
+# The default BWS domain's project is `packages-porta-codes` (machine account
+# packages-porta-codes-ci): Cloudflare only. Other domains pass their own
+# APP_NAME and ARGS (PROVISIONING.md).
+APP_NAME ?= packages-porta-codes
 
 .PHONY: help deps install dev format check test build docs clean plan deploy verify-edge \
 	sync-scripts verify-scripts bws-bootstrap bws-load \
-	validate cloudflare-token tools-image require-workspace
+	validate tools-image
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -58,6 +63,7 @@ check: verify-scripts validate ## Static checks: scripts, workflows, Terraform, 
 	shfmt -i 2 -ci -d $(OWN_SCRIPTS)
 	actionlint
 	terraform fmt -check -recursive
+	bash scripts/provision/aws-oidc-bootstrap.sh --self-test
 	@if [ -d .terraform ]; then terraform validate; else echo "terraform validate: skipped (run terraform init with backend access first)"; fi
 
 # Internal (called by check): release-surfaces.yaml and, when present, the inventory.
@@ -85,44 +91,32 @@ verify-scripts: ## Verify vendored blessed-cicd scripts against their MANIFEST.s
 	  else echo "scripts/$$c: DRIFT — files differ from MANIFEST.sha256"; rc=1; fi; \
 	done; exit $$rc
 
-bws-bootstrap: verify-scripts ## Bootstrap one authority domain: APP_NAME=<BWS project> ARGS="--secrets-list … --project-id-file … --gh-environments …" (PROVISIONING.md §4)
-	@if [ -z "$(APP_NAME)" ] || [ -z "$(ARGS)" ]; then echo "refusing: set APP_NAME and ARGS — this repo has no default domain; see PROVISIONING.md §4"; exit 1; fi
+bws-bootstrap: verify-scripts ## Bootstrap a BWS authority domain (default: APP_NAME=packages-porta-codes, repo-level token); others: APP_NAME=… ARGS="…" (PROVISIONING.md)
 	scripts/bws/bootstrap.sh --app-name $(APP_NAME) $(ARGS)
 
-bws-load: ## Print how to load a domain's secrets locally (this repo's secrets are CI-only)
-	@echo "Every secret here belongs to a CI-only authority domain (repository-signing,"
-	@echo "candidate-ingest) and is loaded in CI by .github/actions/load-secrets with its"
-	@echo "profile. None is needed locally. To inspect a domain as the operator:"
-	@echo "    export BWS_ACCESS_TOKEN=<that domain's read token>   # hidden: read -rs BWS_ACCESS_TOKEN"
-	@echo "    BWS_SECRETS_LIST_FILE=.bws/<domain>.list source scripts/bws/load.sh"
+bws-load: ## Print local shell commands for loading BWS secrets
+	@echo "BWS load.sh must be sourced, not executed. The default domain (Cloudflare only):"
+	@echo "    read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN   # the packages-porta-codes-ci token"
+	@echo "    source scripts/bws/load.sh"
+	@echo "Any other domain: BWS_SECRETS_LIST_FILE=.bws/<domain>.list source scripts/bws/load.sh"
+	@echo "See scripts/bws/README.md and PROVISIONING.md."
 
-require-workspace:
-	@[ "$(TF_WORKSPACE)" = production ] || { echo "refusing: set TF_WORKSPACE=production explicitly (this surface has one workspace)"; exit 1; }
+# Terraform runs in CI (terraform-plan.yml / terraform-apply.yml) with GitHub
+# OIDC roles — no AWS key exists for this stack (blessed-cicd #9). These targets
+# use whatever credentials the environment already holds: the job's role
+# session and the Cloudflare token the load-secrets action exported. One
+# workspace: the default (backend.tf).
+export TF_VAR_cloudflare_account_id ?= $(CLOUDFLARE_ACCOUNT_ID)
 
-# Operator credentials for plan/deploy/verify-edge, never in files, arguments or
-# logs: AWS from the SSO profile, Cloudflare from the macOS keychain item that
-# `make cloudflare-token` stores through a hidden prompt.
-AWS_PROFILE ?= portaj
-CF_KEYCHAIN_ITEM := packages-porta-codes-terraform-cloudflare
-WITH_CREDS = AWS_PROFILE=$(AWS_PROFILE) CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN:-$$(security find-generic-password -s $(CF_KEYCHAIN_ITEM) -w 2>/dev/null)}"
+plan: ## Terraform plan (read-only, no state lock) → plan.tmp + plan.out
+	terraform init -input=false
+	terraform plan -input=false -lock=false -out=plan.tmp
+	terraform show -no-color plan.tmp > plan.out
 
-# Internal operator helper: store the operator's Cloudflare API token in the
-# macOS keychain through a hidden prompt (read by plan, deploy and verify-edge).
-cloudflare-token:
-	@security add-generic-password -U -s $(CF_KEYCHAIN_ITEM) -a terraform -w
-	@echo "stored in keychain item $(CF_KEYCHAIN_ITEM)"
+deploy: ## Apply exactly the reviewed plan.tmp (infrastructure only; packages are published by CI)
+	@[ -f plan.tmp ] || { echo "refusing: no plan.tmp — apply only a reviewed plan (terraform-apply.yml)"; exit 1; }
+	terraform init -input=false
+	terraform apply -input=false plan.tmp
 
-plan: require-workspace ## Terraform plan for TF_WORKSPACE=production → plan.tmp + plan.out
-	@aws sts get-caller-identity --profile $(AWS_PROFILE) >/dev/null 2>&1 || { echo "refusing: AWS profile $(AWS_PROFILE) has no session — run: aws sso login --profile $(AWS_PROFILE)"; exit 1; }
-	@security find-generic-password -s $(CF_KEYCHAIN_ITEM) >/dev/null 2>&1 || [ -n "$${CLOUDFLARE_API_TOKEN:-}" ] || { echo "refusing: no Cloudflare token — run: make cloudflare-token"; exit 1; }
-	$(WITH_CREDS) terraform init -input=false
-	$(WITH_CREDS) terraform workspace select -or-create $(TF_WORKSPACE)
-	$(WITH_CREDS) terraform plan -input=false -out=plan.tmp
-	$(WITH_CREDS) terraform show -no-color plan.tmp > plan.out
-
-deploy: require-workspace ## Apply the reviewed plan.tmp (infrastructure only; packages are published by CI)
-	@[ -f plan.tmp ] || { echo "refusing: no plan.tmp — run make plan and review plan.out first"; exit 1; }
-	$(WITH_CREDS) terraform apply -input=false plan.tmp
-
-verify-edge: ## Live edge as approved: route fails closed, entrypoints routed no-cache, v2 pointer (CLOUDFLARE_API_TOKEN: Workers Routes Read)
-	@$(WITH_CREDS) bash scripts/surface/verify-edge.sh
+verify-edge: ## Live edge as approved: route fails closed, entrypoints routed no-cache, v2 pointer (needs CLOUDFLARE_API_TOKEN)
+	@bash scripts/surface/verify-edge.sh
