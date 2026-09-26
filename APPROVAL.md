@@ -1,10 +1,24 @@
 # Approval package — packages.porta.codes
 
-One decision covering everything the Linux packaging pilot still needs from
-the owner (blessed-cicd #303, #74, #81). Nothing below exists yet: no
-repository, bucket, Worker, role, key, BWS project or token has been created.
-Approve, amend or refuse each numbered item; items 1–4 are needed for the first
-publication, item 5 only if the proof in 5 shows it is required.
+**Status: APPROVED WITH CORRECTIONS (owner, 2026-09-26).** Approved: the
+public repository with a protected `main`, the S3 bucket, Cloudflare DNS and
+the read-only Worker, the scoped AWS publisher role, and the separated BWS
+signing and ingestion domains; the candidate-read token (Contents: read on the
+three producers only). Corrections, now applied below and in the code:
+
+1. **Environments match each producer's trusted release workflow** — kioskd's
+   `rpm-signing` allows tag `v*` only (it releases on `v*` tags, and its signing
+   job asserts the tagged commit is on `main`); corpus and keysprout stay
+   `main`; no Environment is broadened (`scripts/provision/github-environments.sh`).
+2. **The Worker's ORIGIN is the certificate-valid HTTPS S3 REST endpoint**
+   (path-style), never the HTTP website endpoint.
+3. **The Worker route fails closed** when the Free plan allowance is exhausted;
+   Free plan only, no paid services.
+4. **The publisher role is created by Terraform**, inside the reviewed plan (the
+   plan is reviewed before any apply).
+
+The complete owner walkthrough for keys and BWS is **[`PROVISIONING.md`](PROVISIONING.md)**.
+No separate PR-opening credential is requested (§5).
 
 ## 1. Domain and repository
 
@@ -23,8 +37,8 @@ Terraform in this repository (`main.tf`, state `deployments-state/terraform-stat
 |---|---|
 | S3 bucket `packages.porta.codes` (website) | `JonathanPorta/s3-static-site/aws` 1.5.0, as the portfolio's other static sites; public read |
 | Bucket policy guards (publisher principal only) | every `PutObject` except `_state/generation.json` must carry `If-None-Match` (condition key `s3:if-none-match`); the pointer must carry `If-Match` or `If-None-Match` (`s3:if-match` / `s3:if-none-match`); `DeleteObject`/`DeleteObjectVersion` denied. AWS documents both keys for enforcing conditional writes; a side effect is that `CopyObject` into the bucket is refused, which nothing uses. |
-| Cloudflare DNS | `packages.porta.codes` CNAME → the bucket's website endpoint, **proxied** |
-| Cloudflare Worker `packages-porta-codes-router` | the vendored blessed `pkgrepo-router.js` (module), route `packages.porta.codes/*`, one plain-text binding `ORIGIN=http://<bucket website endpoint>`, compatibility date `2026-09-01`, flag `cache_option_enabled` (default since 2024-11-11; listed so the `cache: "no-store"` pointer read is explicit). **No KV, Durable Object, database, lease or secret.** Read-only: GET/HEAD only. |
+| Cloudflare DNS | `packages.porta.codes` CNAME, **proxied**. Its target (the bucket's website endpoint, the module's output) is never reached: the Worker route `packages.porta.codes/*` answers every request, and fails CLOSED (Cloudflare error 1027) if the Free allowance is exhausted — nothing is served around the router |
+| Cloudflare Worker `packages-porta-codes-router` | the vendored blessed `pkgrepo-router.js` (release-v0.5.0, module), route `packages.porta.codes/*`, one plain-text binding `ORIGIN=https://s3.<region>.amazonaws.com/packages.porta.codes` — the bucket's **S3 REST endpoint over HTTPS, path-style** (the bucket name has dots, so the virtual-hosted name does not match S3's wildcard certificate; AWS documents path-style as supported, its deprecation delayed indefinitely). The HTTP-only website endpoint is never fetched. Compatibility date `2026-09-01`, flag `cache_option_enabled`. **No KV, Durable Object, database, lease or secret.** Read-only: GET/HEAD only. Route **fails closed** (`request_limit_fail_open = false`, the API default — the provider cannot set it, so `make verify-edge` asserts it from the live API) |
 | Provider change | Cloudflare provider `~> 5.0` in this repo (the portfolio's proofglass already uses 5.x); `better-uptime` `~> 0.3.15` as the static-site module requires |
 
 Credential needed to apply: the operator's Cloudflare API token must allow
@@ -65,8 +79,12 @@ enforced ceiling; the numbers above are estimates.
 
 ## 3. AWS publisher role
 
-Created once, out of band (the same bootstrap-owned pattern as docsort.io's
-surface publication); Terraform then owns only its inline permissions.
+Created by Terraform in the reviewed plan (owner-authorized). Terraform is
+applied only by the operator from a workstation after the plan is reviewed; no
+workflow has IAM or Terraform authority, so the first-writer race that makes
+docsort.io adopt its role read-only does not arise here. The account-global
+GitHub OIDC provider is looked up by its ARN (docsort.io already uses it) and
+is never re-created.
 
 Role name `packages-porta-codes-publisher`. Trust policy, verbatim
 (`<ACCOUNT_ID>` = the portfolio account):
@@ -126,9 +144,11 @@ Repository variables: `AWS_ACCOUNT_ID`, `AWS_REGION`.
 
 ### Routing authority (separate from publishing)
 
-The router holds **no credential at all**. It reads the bucket through its
-public website endpoint — the same public read clients have — and can only
-GET/HEAD. It cannot write, list or delete anything. The only authority involved
+The router holds **no credential at all**. It reads the bucket anonymously
+through its HTTPS S3 REST endpoint — the same public `s3:GetObject` the bucket
+policy grants everyone — and can only GET/HEAD. (Without anonymous
+`s3:ListBucket`, a missing key is a 403: the router answers 404 for a missing
+entrypoint, and passes a 403 through for any other missing path.) It cannot write, list or delete anything. The only authority involved
 is **deploying** it: the operator's Cloudflare API token used by `make deploy`
 (Workers Scripts: Edit, Workers Routes: Edit, DNS: Edit on `porta.codes`). That
 token is never given to CI or to the publisher role, and the publisher role has
@@ -153,24 +173,21 @@ existing key.
 | keysprout candidate signing key (Ed25519) | NEW — keysprout has none | keysprout: `keysprout-release-signing`, Environment `release-signing` | `keysprout-release-signing-ci` |
 | Publication | none — GitHub OIDC to the role in §3 | Environment `repository-publication` | — |
 
-Every Environment's deployment branch policy: **`main` only**. Producer
-Environments additionally accept their release tags (`v*`) if their release
-workflow runs on tags.
+Environment deployment policies match each trusted release workflow exactly:
+`main` for this repository's three Environments and for corpus and keysprout;
+**tag `v*` only** for kioskd's `rpm-signing` (see PROVISIONING.md §0).
 
 ### Ordered steps
 
 | # | Who | Step |
 |---|---|---|
-| 1 | owner | Approve §1–§4 (or amend). |
-| 2 | me | Create the repository (public unless you say otherwise), push `main`, create the three Environments and the `main` ruleset. |
-| 3 | owner | On a trusted workstation: `scripts/provision/generate-keys.sh ~/ppc-keys-$(date +%F)`. It writes the six new private keys 0600 into that new directory, prints **only** fingerprints and the exact commands below, uploads nothing and touches no existing key. |
-| 4 | me | Commit the public halves and fingerprints it printed (`keys/`, `inventory/layout.json`); producers' public halves go in their release-ceremony PRs. |
-| 5 | owner | For each new domain, preview then create it with the existing bootstrapper (`scripts/bws/bootstrap.sh`, bws 1.9.1; it names the machine account `<app-name>-ci`):<br>`scripts/bws/bootstrap.sh --app-name packages-porta-codes-repo-signing --secrets-list .bws/repository-signing.list --loader .github/actions/load-repository-signing/action.yml --project-id-file .bws/repository-signing.env --gh-environments repository-signing --plan` (review) then the same with `--no-secret-values`;<br>likewise `packages-porta-codes-candidate-ingest` (`candidate-ingest`), and in each producer repo `<repo>-rpm-signing` (`rpm-signing`) and, for corpus and keysprout, `<repo>-release-signing` (`release-signing`). Machine-account tokens are created in the Bitwarden web UI. |
-| 6 | owner | Paste each private file's **contents** into its Bitwarden secret in the web UI (never a terminal argument, never chat); create the candidate-read PAT in the GitHub UI and paste it the same way. Then shred the directory (`rm -P` on macOS). |
-| 7 | owner | Create the IAM role with the §3 trust policy (or authorize me to run exactly that `aws iam create-role`); set `AWS_ACCOUNT_ID`, `AWS_REGION`. |
-| 8 | me | `make plan TF_WORKSPACE=production`, post `plan.out` for review; after approval `make deploy`. |
-| 9 | me | Producer release-ceremony PRs (RPM finalization with signing-v0.3.0 `rpm-finalize.sh`; candidate signing for corpus/keysprout), each through review. |
-| 10 | me | Admit the first candidates, prove the admission-PR check behaviour (§5), merge through review, and watch **Publish** through read-back; record the evidence against PR-2…PR-15. |
+| 1 | owner | ✅ Approved with corrections (2026-09-26). |
+| 2 | me | Create the public repository, push `main` through review, set its ruleset and create every Environment (`scripts/provision/github-environments.sh --apply`); open the producers' declaration PRs (`.bws` lists, loaders, Environments) through review. |
+| 3 | me | `make plan TF_WORKSPACE=production` — bucket, guards, DNS, Worker, route **and the publisher role** — and post `plan.out` for review. |
+| 4 | owner | Review and approve that plan. Then I run `make deploy` and `make verify-edge`. |
+| 5 | owner | Follow **PROVISIONING.md** §1–§6 (key generation, the read-only PAT, seven bootstrapper runs, web-UI secret entry, cleanup). |
+| 6 | me | Commit public halves, fingerprints and the filled loader UUIDs; producer release-ceremony PRs (RPM finalization with signing-v0.3.0; candidate signing for corpus/keysprout; kioskd's tag job asserts ancestry of `main`), each through review. |
+| 7 | me | Admit the first candidates, prove the admission-PR check path (§5), merge through review, watch **Publish** through read-back, then real APT/DNF evidence against `https://packages.porta.codes/`; record it against PR-2…PR-15. |
 
 ## 5. Admission PRs and required checks
 

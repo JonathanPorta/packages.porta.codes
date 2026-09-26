@@ -107,17 +107,19 @@ existing) and the ordered steps — is **[`APPROVAL.md`](APPROVAL.md)**. In shor
 2. **Infrastructure and spend** — one S3 website bucket + Cloudflare proxied
    CNAME via `s3-static-site` 1.5.0 and one read-only router Worker
    (`make plan TF_WORKSPACE=production`, then `make deploy`); itemized in
-   `APPROVAL.md`. Plus one bootstrap-owned IAM role
-   `packages-porta-codes-publisher` trusting
-   `repo:JonathanPorta/packages.porta.codes:environment:repository-publication`
-   (Terraform owns only its permissions); set repository variables
-   `AWS_ACCOUNT_ID` and `AWS_REGION`.
+   `APPROVAL.md`. Plus the IAM role `packages-porta-codes-publisher`, created
+   by Terraform in the reviewed plan, trusting only
+   `repo:JonathanPorta/packages.porta.codes:environment:repository-publication`;
+   set repository variables `AWS_ACCOUNT_ID` and `AWS_REGION`.
 3. **Credential authority** — create the keys and authority domains below.
 
 ## Provisioning (one time, after the decisions)
 
-1. Create the repository; push `main`; create Environments `candidate-ingest`,
-   `repository-signing`, `repository-publication` (allowed ref: `main`).
+The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in outline:
+
+1. Create the repository; push `main`; create every Environment with its exact
+   deployment policy (`scripts/provision/github-environments.sh --apply`:
+   `main` here and in corpus/keysprout, tag `v*` only for kioskd `rpm-signing`).
 2. `scripts/provision/generate-keys.sh <new-dir>` on a trusted workstation:
    generates the repository key and the three producer RPM keys (OpenPGP RSA
    4096) and the corpus/keysprout candidate keys (Ed25519) into 0600 files,
