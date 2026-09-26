@@ -164,7 +164,7 @@ check_perms() {
   }
 }
 
-canon() { jq -cS '.Statement |= sort_by(.Sid // "")' <<<"$1"; }
+canon() { jq -cS 'if (.Statement | type) == "array" then .Statement |= sort_by(.Sid // "") else . end' <<<"$1"; }
 
 # aws_read OUTVAR -- aws ARGS… → 0 found (stdout in OUTVAR), 3 NoSuchEntity.
 # ANY other error (AccessDenied above all) stops the run: an unreadable object
@@ -445,7 +445,13 @@ ensure_role() { # $1 role, $2 environment, $3 permissions file or -, $4 boundary
     cur='{}' rc=0
     if [ "$mode" = apply ] || aws iam get-role --role-name "$role" >/dev/null 2>&1; then
       aws_read cur -- iam get-role-policy --role-name "$role" --policy-name permissions --query PolicyDocument --output json || rc=$?
-      [ "$rc" -eq 0 ] || cur='{}'
+      # Only "no such policy" means empty; any other read failure stops here
+      # rather than being taken for an empty current state.
+      case "$rc" in
+        0) ;;
+        3) cur='{}' ;;
+        *) die "cannot read the inline permissions of $role" ;;
+      esac
     fi
     if [ "$(canon "$cur")" != "$(canon "$doc")" ]; then
       if [ "$mode" = apply ]; then
