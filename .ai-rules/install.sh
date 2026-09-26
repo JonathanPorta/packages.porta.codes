@@ -1,0 +1,425 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# install.sh — Install or update ai-rules via git subtree
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/JonathanPorta/ai-rules/main/install.sh | bash
+#
+# What it does:
+#   - If .ai-rules/ doesn't exist: git subtree add from latest release tag
+#   - If .ai-rules/ exists and is ours: git subtree pull to latest release tag
+#   - If .ai-rules/ exists but isn't ours: abort with warning
+#
+
+# DEFAULT_HOST, DEFAULT_OWNER, DEFAULT_REPO point at the upstream repo this
+# script was distributed from. Forks rewrite these locally by running
+# claim-fork.sh once after cloning; see README's "Forking" section.
+DEFAULT_HOST="github.com"
+DEFAULT_OWNER="JonathanPorta"
+DEFAULT_REPO="ai-rules"
+
+# Runtime override via env vars; otherwise the stamped defaults above.
+HOST="${AI_RULES_HOST:-$DEFAULT_HOST}"
+OWNER="${AI_RULES_OWNER:-$DEFAULT_OWNER}"
+REPO_NAME="${AI_RULES_REPO:-$DEFAULT_REPO}"
+
+# Clone-mode auto-detect: if install.sh is being executed from a file inside
+# what looks like an ai-rules checkout (has setup.sh + AGENTS.md as sentinels),
+# derive HOST/OWNER/REPO_NAME from that clone's git origin. Skipped under
+# curl|bash because BASH_SOURCE[0] is not a real file path in that flow.
+if [[ -z "${AI_RULES_HOST:-}" && -z "${AI_RULES_OWNER:-}" && -z "${AI_RULES_REPO:-}" \
+      && -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  # `pwd -P` gives the physical path; matches what git rev-parse returns,
+  # which is necessary on macOS where /tmp -> /private/tmp and similar
+  # symlinks would otherwise make the toplevel-equality check below miss.
+  _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  # Only adopt the script-dir's git origin when this directory is the
+  # toplevel of its own git repo — i.e. install.sh is being run from an
+  # actual clone of ai-rules. For subtree installs (where .ai-rules/
+  # lives *inside* a consumer repo), git would walk up to the consumer's
+  # config and we'd build an API URL pointing at the wrong repo (e.g.
+  # api.github.com/repos/<consumer-owner>/<consumer-repo>/releases/latest,
+  # which 404s). The toplevel-equality check rejects that case cleanly.
+  _script_toplevel="$(git -C "$_script_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -f "$_script_dir/setup.sh" && -f "$_script_dir/AGENTS.md" \
+        && -n "$_script_toplevel" && "$_script_toplevel" == "$_script_dir" ]]; then
+    _detected="$(git -C "$_script_dir" config --get remote.origin.url 2>/dev/null || true)"
+    _parsed_host=""; _parsed_owner=""; _parsed_repo=""
+    if [[ "$_detected" =~ ^https?://([^/]+)/([^/]+)/([^/]+)$ ]]; then
+      _parsed_host="${BASH_REMATCH[1]}"
+      _parsed_owner="${BASH_REMATCH[2]}"
+      _parsed_repo="${BASH_REMATCH[3]%.git}"
+    elif [[ "$_detected" =~ ^git@([^:]+):([^/]+)/([^/]+)$ ]]; then
+      _parsed_host="${BASH_REMATCH[1]}"
+      _parsed_owner="${BASH_REMATCH[2]}"
+      _parsed_repo="${BASH_REMATCH[3]%.git}"
+    fi
+    # Only adopt parsed values if the host looks like a real domain
+    # (contains a dot). SSH config aliases like "gh-alt" must not become
+    # API hosts — fall back to stamped defaults instead.
+    if [[ -n "$_parsed_host" && "$_parsed_host" == *.* ]]; then
+      HOST="$_parsed_host"
+      OWNER="$_parsed_owner"
+      REPO_NAME="$_parsed_repo"
+    fi
+    unset _detected _parsed_host _parsed_owner _parsed_repo
+  fi
+  unset _script_dir _script_toplevel
+fi
+
+# Derive the three URL bases from HOST. github.com uses dedicated subdomains
+# for the API and raw content; GitHub Enterprise serves both under the same
+# host (api/v3 and /raw paths).
+if [[ "$HOST" == "github.com" ]]; then
+  API_BASE="https://api.github.com"
+else
+  API_BASE="https://${HOST}/api/v3"
+fi
+WEB_BASE="https://${HOST}"
+
+REPO="${WEB_BASE}/${OWNER}/${REPO_NAME}.git"
+REPO_API="${API_BASE}/repos/${OWNER}/${REPO_NAME}/releases/latest"
+ORIGIN_URL="${WEB_BASE}/${OWNER}/${REPO_NAME}"
+PREFIX=".ai-rules"
+VERSION_FILE="${PREFIX}/.version"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+info()  { echo -e "${GREEN}[ai-rules]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[ai-rules]${NC} $*"; }
+error() { echo -e "${RED}[ai-rules]${NC} $*" >&2; }
+
+# Idempotently ensure the consuming repo's root .gitignore protects
+# private styleguide overlays (the .ai-local/ convention). Called from
+# every success path so existing repos pick up the entry on update,
+# not only on fresh install.
+ensure_ai_local_gitignore() {
+  local marker="# ai-rules-local-config"
+  if [[ -f .gitignore ]] && grep -qF "$marker" .gitignore; then
+    return 0
+  fi
+  if [[ "${DRY_RUN:-false}" == true ]]; then
+    info "[dry-run] would add .ai-local/ to .gitignore (private styleguide overlays)."
+    return 0
+  fi
+  {
+    if [[ -f .gitignore ]] && [[ -n "$(tail -c 1 .gitignore)" ]]; then
+      echo ""
+    fi
+    echo "$marker"
+    echo ".ai-local/"
+  } >> .gitignore
+  info "Added .ai-local/ to .gitignore (private styleguide overlays)."
+}
+
+usage() {
+  local exit_code="${1:-0}"
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Install or update ai-rules in the current repository via git subtree.
+With no options: install ai-rules if ${PREFIX}/ is absent, otherwise update
+it to the latest release, then ensure .ai-local/ is gitignored.
+
+Options:
+  --check      Print a read-only status report — upstream identity, the
+               installed version, and drift versus the latest release — then
+               exit. Makes no git or filesystem changes and works whether or
+               not ai-rules is installed.
+  --dry-run    Preview the planned action without changing anything. Runs the
+               read-only checks (preflight, latest-release lookup, version
+               comparison) and prints the git subtree command and .gitignore
+               change it would make — but performs neither.
+  -h, --help   Show this help message and exit.
+
+Identity is resolved from these environment variables, falling back to the
+values stamped into this script:
+  AI_RULES_HOST    (default: ${HOST})
+  AI_RULES_OWNER   (default: ${OWNER})
+  AI_RULES_REPO    (default: ${REPO_NAME})
+
+Examples:
+  $(basename "$0")                          # install or update to latest
+  $(basename "$0") --check                  # report status without changing anything
+  $(basename "$0") --dry-run                # preview without changing anything
+  curl -fsSL <raw-url>/install.sh | bash -s -- --dry-run
+EOF
+  exit "$exit_code"
+}
+
+# Fetch the latest release tag from the GitHub API. Prints the tag to stdout,
+# or nothing if the API is unreachable / has no releases. Never fails — the
+# caller decides what an empty result means (the normal path errors; --check
+# reports "unknown"). This is the only GitHub-API call install.sh makes (the
+# subtree add/pull on the install path also talks to the remote).
+fetch_latest_tag() {
+  # Escape hatch: pin the "latest" tag without a network call. Useful in
+  # air-gapped environments and for deterministic tests of --check.
+  if [[ -n "${AI_RULES_LATEST_TAG:-}" ]]; then
+    printf '%s' "$AI_RULES_LATEST_TAG"
+    return 0
+  fi
+  local tag=""
+  if command -v curl &>/dev/null; then
+    tag=$(curl -fsSL --max-time 10 "$REPO_API" 2>/dev/null | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//') || true
+  elif command -v wget &>/dev/null; then
+    tag=$(wget -qO- --timeout=10 "$REPO_API" 2>/dev/null | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//') || true
+  fi
+  printf '%s' "$tag"
+  return 0
+}
+
+# Read-only status report. No git mutations, no filesystem writes; the only
+# side effect is the single latest-release API fetch. Always exits 0 — drift
+# is communicated in the report body, not the exit code.
+run_check() {
+  local installed_tag="" installed_origin="" latest status to_update origin_matches
+
+  latest="$(fetch_latest_tag)"
+
+  echo "ai-rules status:"
+  printf '  %-19s %s\n' "upstream:" "${HOST}/${OWNER}/${REPO_NAME}"
+
+  if [[ ! -d "$PREFIX" ]]; then
+    printf '  %-19s %s\n' "installed at:" "not installed"
+    printf '  %-19s %s\n' "origin matches:" "N/A"
+    if [[ -n "$latest" ]]; then
+      printf '  %-19s %s\n' "latest available:" "$latest"
+      printf '  %-19s %s\n' "status:" "not installed"
+    else
+      printf '  %-19s %s\n' "latest available:" "unknown"
+      printf '  %-19s %s\n' "status:" "unknown"
+    fi
+    printf '  %-19s %s\n' "to update:" "N/A"
+    return 0
+  fi
+
+  if [[ ! -f "$VERSION_FILE" ]]; then
+    # Directory exists but no .version — not installed by ai-rules.
+    printf '  %-19s %s\n' "installed at:" "${PREFIX}/ (no .version)"
+    printf '  %-19s %s\n' "origin matches:" "N/A"
+    printf '  %-19s %s\n' "latest available:" "${latest:-unknown}"
+    printf '  %-19s %s\n' "status:" "unmanaged"
+    printf '  %-19s %s\n' "to update:" "N/A"
+    return 0
+  fi
+
+  installed_origin=$(grep '^origin=' "$VERSION_FILE" 2>/dev/null | cut -d= -f2- || true)
+  installed_tag=$(grep '^tag=' "$VERSION_FILE" 2>/dev/null | cut -d= -f2- || true)
+
+  printf '  %-19s %s\n' "installed at:" "${PREFIX}/ (${installed_tag:-unknown})"
+
+  if [[ "$installed_origin" == "$ORIGIN_URL" ]]; then
+    origin_matches="yes"
+  else
+    origin_matches="no"
+  fi
+  printf '  %-19s %s\n' "origin matches:" "$origin_matches"
+  printf '  %-19s %s\n' "latest available:" "${latest:-unknown}"
+
+  if [[ "$origin_matches" == "no" ]]; then
+    status="origin mismatch"
+    to_update="N/A"
+  elif [[ -z "$latest" ]]; then
+    status="unknown"
+    to_update="N/A"
+  elif [[ "$installed_tag" == "$latest" ]]; then
+    status="up to date"
+    to_update="N/A"
+  else
+    status="update available"
+    to_update="${PREFIX}/install.sh"
+  fi
+  printf '  %-19s %s\n' "status:" "$status"
+  printf '  %-19s %s\n' "to update:" "$to_update"
+  return 0
+}
+
+# -------------------------------------------------------------------
+# Argument parsing
+# -------------------------------------------------------------------
+# Placed before preflight so --check and --help work without (and without
+# mutating) a git repository, and so --dry-run can soften the
+# uncommitted-changes preflight below.
+CHECK=false
+DRY_RUN=false
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --check) CHECK=true; shift ;;
+    --dry-run) DRY_RUN=true; shift ;;
+    -h|--help) usage 0 ;;
+    *) error "Unknown option: $1"; usage 1 ;;
+  esac
+done
+
+if [[ "$CHECK" == true ]]; then
+  # Resolve to the repo root so .ai-rules/ is found regardless of the current
+  # directory (this cd is read-only — it doesn't affect the parent shell). When
+  # not inside a git repo, stay put so the "not installed" report still works.
+  _root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$_root" ]] && cd "$_root"
+  run_check
+  exit 0
+fi
+
+if [[ "$DRY_RUN" == true ]]; then
+  info "[dry-run] resolved identity: ${HOST}/${OWNER}/${REPO_NAME}"
+fi
+
+# -------------------------------------------------------------------
+# Preflight checks
+# -------------------------------------------------------------------
+
+# Must have git
+if ! command -v git &>/dev/null; then
+  error "git is not installed."
+  exit 1
+fi
+
+# Must be in a git repo
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  error "Not inside a git repository. Run this from your project root."
+  exit 1
+fi
+
+# Must have git subtree available.
+# git subtree is a contrib shell script, not a binary — 'command -v git-subtree'
+# won't find it. Invoking 'git subtree' with no args prints usage to stdout
+# but exits non-zero, so we check if the output contains 'usage' regardless of
+# exit code.
+SUBTREE_CHECK=$(git subtree 2>&1 || true)
+if ! echo "$SUBTREE_CHECK" | grep -qi 'usage'; then
+  error "'git subtree' is not available on this system."
+  error "On Debian/Ubuntu: sudo apt-get install git-subtree"
+  error "On macOS: it is included with git from Homebrew (brew install git)"
+  error "On other systems: check your git installation or install git-subtree separately."
+  exit 1
+fi
+
+# Must be at repo root (subtree requires it)
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [[ "$PWD" != "$REPO_ROOT" ]]; then
+  warn "Changing to repository root: $REPO_ROOT"
+  cd "$REPO_ROOT"
+fi
+
+# Check for uncommitted changes (subtree needs a clean working tree)
+if ! git rev-parse HEAD &>/dev/null; then
+  error "Repository has no commits. Create an initial commit before installing."
+  exit 1
+fi
+if ! git diff-index --quiet HEAD --; then
+  if [[ "$DRY_RUN" == true ]]; then
+    warn "You have uncommitted changes — a real run would require a clean tree."
+    warn "(--dry-run: previewing anyway; no mutating commands will run.)"
+  else
+    error "You have uncommitted changes. Commit or stash them before installing."
+    exit 1
+  fi
+fi
+
+# -------------------------------------------------------------------
+# Fetch latest release tag
+# -------------------------------------------------------------------
+
+info "Fetching latest release..."
+
+# curl/wget are only needed for the live API lookup. When AI_RULES_LATEST_TAG
+# pins the tag, fetch_latest_tag never touches the network, so don't require
+# them (keeps the air-gapped escape hatch usable for deterministic --check /
+# --dry-run runs).
+if [[ -z "${AI_RULES_LATEST_TAG:-}" ]] \
+   && ! command -v curl &>/dev/null && ! command -v wget &>/dev/null; then
+  error "Neither curl nor wget found. Install one and try again."
+  exit 1
+fi
+
+LATEST_TAG="$(fetch_latest_tag)"
+
+if [[ -z "$LATEST_TAG" ]]; then
+  error "No releases found. The repository may not have any tagged releases yet."
+  error "You can install from main instead:"
+  error "  git subtree add --prefix=${PREFIX} ${REPO} main --squash"
+  exit 1
+fi
+
+info "Latest release: ${LATEST_TAG}"
+
+# -------------------------------------------------------------------
+# Determine action: install, update, or abort
+# -------------------------------------------------------------------
+
+if [[ ! -d "$PREFIX" ]]; then
+  # Fresh install
+  info "Installing ai-rules ${LATEST_TAG}..."
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] would run: git subtree add --prefix=${PREFIX} ${REPO} ${LATEST_TAG} --squash"
+  else
+    git subtree add --prefix="$PREFIX" "$REPO" "$LATEST_TAG" --squash
+  fi
+
+  ensure_ai_local_gitignore
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] no changes were made."
+  else
+    info "Installation complete."
+    info ""
+    info "Next steps:"
+    info "  1. Run: ${PREFIX}/setup.sh --platforms cursor,windsurf,copilot"
+    info "  2. Commit the generated platform stubs"
+    info "  3. Read ${PREFIX}/AGENTS.md to understand the rules"
+  fi
+
+elif [[ -f "$VERSION_FILE" ]]; then
+  # Directory exists — check if it's ours
+  INSTALLED_ORIGIN=$(grep '^origin=' "$VERSION_FILE" 2>/dev/null | cut -d= -f2- || true)
+
+  if [[ "$INSTALLED_ORIGIN" != "$ORIGIN_URL" ]]; then
+    error "${PREFIX}/ exists but its origin doesn't match."
+    error "  Expected: ${ORIGIN_URL}"
+    error "  Found:    ${INSTALLED_ORIGIN:-<none>}"
+    error ""
+    error "Remove ${PREFIX}/ manually if you want to reinstall."
+    exit 1
+  fi
+
+  # It's ours — check current version
+  INSTALLED_TAG=$(grep '^tag=' "$VERSION_FILE" 2>/dev/null | cut -d= -f2- || true)
+
+  if [[ "$INSTALLED_TAG" == "$LATEST_TAG" ]]; then
+    info "Already up to date at ${LATEST_TAG}."
+    ensure_ai_local_gitignore
+    exit 0
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] would update ai-rules from ${INSTALLED_TAG} to ${LATEST_TAG}"
+    info "[dry-run] would run: git subtree pull --prefix=${PREFIX} ${REPO} ${LATEST_TAG} --squash"
+  else
+    info "Updating ai-rules from ${INSTALLED_TAG} to ${LATEST_TAG}..."
+    git subtree pull --prefix="$PREFIX" "$REPO" "$LATEST_TAG" --squash
+  fi
+
+  ensure_ai_local_gitignore
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] no changes were made."
+  else
+    info "Update complete: ${INSTALLED_TAG} → ${LATEST_TAG}"
+  fi
+
+else
+  # Directory exists but no .version file — not ours
+  error "${PREFIX}/ directory exists but has no .version file."
+  error "This directory was not installed by ai-rules."
+  error ""
+  error "If you want to install ai-rules here, remove the directory first:"
+  error "  rm -rf ${PREFIX}"
+  error "Then run this script again."
+  exit 1
+fi
