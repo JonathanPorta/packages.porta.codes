@@ -124,7 +124,10 @@ scripts/bws/bootstrap.sh --app-name <project> --secrets-list .bws/<domain>.list 
 ```
 
 (b) creates the BWS project `<project>`, then prints the web-UI steps for the
-machine account. Do exactly these in the Bitwarden web vault:
+machine account. Its summary always includes a line `Cloudflare token
+<project>-ci`: that is only the name it would suggest for a Cloudflare token.
+These domains declare no Cloudflare secret, so ignore it; create no Cloudflare
+token. Do exactly these in the Bitwarden web vault:
 
 1. Secrets Manager → Machine accounts → New → name **`<project>-ci`**.
 2. Projects tab of that machine account → add **only** `<project>` with
