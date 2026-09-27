@@ -84,7 +84,7 @@ other existing credential are **not touched**. Nothing here rotates anything.
   read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN   # paste at the hidden prompt, Enter
   ```
 
-  Run `unset BWS_ACCESS_TOKEN` at the end (§11).
+  Run `unset BWS_ACCESS_TOKEN` at the end of Batch B (§9); `$KEYS` is deleted only in §11, after §10 verifies every vault key.
 
 ## 2. Generate the new keys (once)
 
@@ -145,7 +145,7 @@ to do for it.
 
 | Token | What it is | The ONLY place it goes | Lifetime here |
 |---|---|---|---|
-| **BWS admin (bootstrapper) token** | your Bitwarden admin/org access token, which can create projects | exported in the shell: `read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN` | one terminal session; `unset` at the end |
+| **BWS admin (bootstrapper) token** | your Bitwarden admin/org access token, which can create projects | exported in the shell: `read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN` | one terminal session; `unset` at the end of Batch B |
 | **Machine-account access token** | minted in the web vault for `<project>-ci` | pasted at the bootstrapper's **hidden prompt**, which stores it as GitHub secret `BWS_ACCESS_TOKEN` (row 0: repository secret; every other row: that row's **Environment** secret) | stays in GitHub; never in a file, chat or command |
 | **Service secret** | a private key file's CONTENTS, the candidate-read PAT, or the Cloudflare API token | pasted **only** into the Bitwarden web vault, as the named secret in the named project | stays in Bitwarden |
 
@@ -284,8 +284,16 @@ so the merged Batch A fill is already in the loader):
 | B3 | `/Users/portaj/devel/portaj/keysprout` | `release-signing` | `keysprout-release-signing` | `keysprout-release-signing-ci` | `release-signing` (branch `main`) | `KEYSPROUT_RELEASE_SIGNING_KEY` ← contents of `$KEYS/keysprout-release.pem` |
 
 Vault steps 1–4 exactly as in §7; re-run (b); `git status --short` shows the
-row's `.bws/<domain>.env` and the loader. Then do §11 (cleanup) and tell me
-**"batch B done"**. I commit those three ID fills the same way as §8.
+row's `.bws/<domain>.env` and the loader. Then end the BWS session — but
+**keep `$KEYS`**:
+
+```sh
+unset BWS_ACCESS_TOKEN      # the admin token is no longer needed
+```
+
+and tell me **"batch B done"**. I commit those three ID fills the same way as
+§8, then verify (§10). `$KEYS` holds the only copy of each private key outside
+the vault until that verification passes, so do **not** delete it yet.
 
 Only row 0 sets a repository-level `BWS_ACCESS_TOKEN`, and only in
 packages.porta.codes (which has none today). Nothing here touches the `kioskd`
@@ -295,7 +303,7 @@ kioskd's existing candidate key, or any other existing secret. The producers'
 every command in §7 and §9 was checked with `--dry-run` against each
 repository's `main`.
 
-## 10. Verification (metadata only — I do this; you need not)
+## 10. Verification — before any key is deleted (I do this)
 
 For each row, read-only: project and secret NAMES and GitHub secret NAMES,
 never a value:
@@ -308,14 +316,29 @@ gh api repos/JonathanPorta/<repo>/environments/<environment>/secrets --jq '.secr
 
 I then confirm: each loader's IDs are real (no placeholder left), each
 Environment has exactly one secret and its one deployment policy, and a dry
-signing run in each domain reports only the loaded key's **fingerprint**, which
-must equal the one Batch K printed.
+signing run in each domain — the real loader, the real Environment token, the
+vault secret — signs a throwaway input and reports only the signing key's
+**fingerprint** (Ed25519: its public key), which must equal the one Batch K
+printed for that domain.
 
-## 11. Cleanup (end of Batch B)
+- **All six match:** I tell you **"cleanup authorized"** → do §11.
+- **One does not** (a truncated or wrong paste still passes the
+  bootstrapper's name/ID lookup): I name the domain and secret; you re-paste
+  the CONTENTS of that row's file from `$KEYS` into that secret in the web
+  vault (vault step 4 only — no bootstrapper run, no new token), tell me
+  "re-pasted <secret>", and I re-verify that domain. Nothing is deleted until
+  all six match.
+
+(The PAT and the Cloudflare token have no local copy to lose: a wrong one is
+replaced by minting a new one; they are verified by a read-only call — the PAT
+reads one producer's release, the Cloudflare token reads the `porta.codes`
+zone.)
+
+## 11. Cleanup — only after I say "cleanup authorized" (§10)
 
 ```sh
-unset BWS_ACCESS_TOKEN
 rm -P "$KEYS"/* && rmdir "$KEYS"      # macOS: overwrite, then delete
+unset BWS_ACCESS_TOKEN                # harmless if already unset
 ```
 
 Keep no other copy of any private file or of the PAT.
