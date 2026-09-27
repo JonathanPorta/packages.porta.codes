@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bws-loader-bootstrap.sh — the committed loader, run through the PRODUCTION
 # bootstrapper (vendored scripts/bws/bootstrap.sh) with recording fakes for
-# `bws` and `gh`, domain by domain as PROVISIONING.md §4 prescribes.
+# `bws` and `gh`, domain by domain as PROVISIONING.md §5–§9 prescribe.
 #
 # Proves (review F3/F2 on PR #1):
 #   · the default (Cloudflare) domain becomes usable: CLOUDFLARE_API_TOKEN gets

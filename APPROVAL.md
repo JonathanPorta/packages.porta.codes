@@ -193,7 +193,7 @@ Environment deployment policies match each trusted release workflow exactly:
 |---|---|---|
 | 1 | owner | ✅ Approved with corrections (2026-09-26). |
 | 2 | me | Create the public repository, push `main` through review, set its ruleset and create every Environment (`scripts/provision/github-environments.sh --apply`); open the producers' declaration PRs (`.bws` lists, loaders, Environments) through review. |
-| 3 | owner | Follow **PROVISIONING.md** §1–§6: the Cloudflare token and default domain, key generation, the read-only PAT, the signing/ingest bootstrapper runs, web-UI secret entry, cleanup; and an SSO sign-in on an IAM-capable permission set for step 4. |
+| 3 | owner | Follow **PROVISIONING.md** §1–§11 (row 0, Batch K, Batch A, Batch B): the Cloudflare token and default domain, key generation, the read-only PAT, the signing/ingest bootstrapper runs, web-UI secret entry, cleanup; and an SSO sign-in on an IAM-capable permission set for step 4. |
 | 4 | me | With that SSO session: `scripts/provision/aws-oidc-bootstrap.sh` (`--plan`, then `--apply`, then `--verify`) — the Environments read back first, then the three roles, their trust and boundaries (owner-authorized as part of this deployment). |
 | 5 | me → owner | Dispatch **Terraform plan** on `main`; the owner reviews the `terraform-plan` artifact (bucket, guards, DNS, Worker, route, the publisher's inline policy). On approval I dispatch **Terraform apply** with that run id, then `make verify-edge`. |
 | 6 | me | Commit public halves, fingerprints and the filled loader UUIDs; producer release-ceremony PRs (RPM finalization with signing-v0.3.0; candidate signing for corpus/keysprout; kioskd's tag job asserts ancestry of `main`), each through review. |

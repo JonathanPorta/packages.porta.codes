@@ -14,7 +14,7 @@ which pipes it to `gh secret set` over stdin. No step prints a secret.
 **No AWS key is created anywhere** (blessed-cicd #9): every AWS call is a
 GitHub OIDC role session. BWS holds only Cloudflare (the default domain),
 signing keys and the candidate read token. The three AWS roles are
-bootstrap-owned (§8; #239).
+bootstrap-owned (§13; #239).
 
 Existing identities are kept: kioskd's candidate signing key
 (`RELEASE_SIGNING_KEY`, BWS project `kioskd`, its repository-level
@@ -67,10 +67,10 @@ other existing credential are **not touched**. Nothing here rotates anything.
 - Tools: `bws` CLI (2.0.0 is installed), `gh` ≥ 2.40 logged in as
   JonathanPorta with the `repo` scope (it is; `gh auth status`), `jq`, `gpg`
   (2.5.20 installed), `openssl` 3.x (3.6.3 installed).
-- AWS (for §8 only): the AWS CLI v2 and an IAM Identity Center profile whose
+- AWS (for §13 only): the AWS CLI v2 and an IAM Identity Center profile whose
   permission set can administer IAM roles and policies. **`portaj` today signs
   in as `PowerUserAccess`, which has no IAM rights** (verified 2026-09-26: it is
-  denied even `iam:GetOpenIDConnectProvider`), so §8 needs a profile on an
+  denied even `iam:GetOpenIDConnectProvider`), so §13 needs a profile on an
   IAM-capable permission set (e.g. `AdministratorAccess`). When I ask, run
   `aws sso login --profile <that profile>` — a browser sign-in; nothing is
   pasted anywhere. No AWS access key is created.
@@ -84,7 +84,7 @@ other existing credential are **not touched**. Nothing here rotates anything.
   read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN   # paste at the hidden prompt, Enter
   ```
 
-  Run `unset BWS_ACCESS_TOKEN` at the end (§6).
+  Run `unset BWS_ACCESS_TOKEN` at the end of Batch B (§9); `$KEYS` is deleted only in §11, after §10 verifies every vault key.
 
 ## 2. Generate the new keys (once)
 
@@ -123,7 +123,7 @@ github.com → Settings → Developer settings → Fine-grained tokens → Gener
 - Repository permissions: **Contents: Read-only** (Metadata: Read-only is
   added automatically). Nothing else. No account permissions.
 
-Copy it straight into the Bitwarden web vault in §4 (row 2); do not store it
+Copy it straight into the Bitwarden web vault in §9 (row B1); do not store it
 anywhere else.
 
 ## 3b. The Cloudflare token (Cloudflare dashboard)
@@ -137,11 +137,22 @@ dash.cloudflare.com → My Profile → API Tokens → Create Token → **Custom 
   resources: **Specific zone → `porta.codes`** only. No IP filter needed; TTL
   optional (put any expiry date in your calendar).
 
-Copy it straight into the Bitwarden web vault in §4 (row 0); do not store it
+Copy it straight into the Bitwarden web vault in §5 (row 0); do not store it
 anywhere else. `CLOUDFLARE_ACCOUNT_ID` already exists in `_shared-ci`; nothing
 to do for it.
 
-## 4. One authority domain at a time (1 default + 7 domains)
+## 4. Three kinds of token — never interchangeable
+
+| Token | What it is | The ONLY place it goes | Lifetime here |
+|---|---|---|---|
+| **BWS admin (bootstrapper) token** | your Bitwarden admin/org access token, which can create projects | exported in the shell: `read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN` | one terminal session; `unset` at the end of Batch B |
+| **Machine-account access token** | minted in the web vault for `<project>-ci` | pasted at the bootstrapper's **hidden prompt**, which stores it as GitHub secret `BWS_ACCESS_TOKEN` (row 0: repository secret; every other row: that row's **Environment** secret) | stays in GitHub; never in a file, chat or command |
+| **Service secret** | a private key file's CONTENTS, the candidate-read PAT, or the Cloudflare API token | pasted **only** into the Bitwarden web vault, as the named secret in the named project | stays in Bitwarden |
+
+The bootstrapper never receives a service secret (`--no-secret-values`), and no
+command below takes any token as an argument.
+
+## 5. Row 0 — the default domain (done first; unchanged)
 
 **Row 0 — the default domain (Cloudflare only), in
 `/Users/portaj/devel/portaj/packages.porta.codes`.** Its token is the one
@@ -166,20 +177,39 @@ key whose value lives in `_shared-ci`, and the loader already carries its
 canonical `_shared-ci` id (`6c68ee9e-…`, the same id every static site's loader
 carries — `scripts/bws/bootstrap.sh` `shared_uuid_for`). Re-run (b) once the
 secret exists: it fills only the `CLOUDFLARE_API_TOKEN` line. Then **stop at
-the checkpoint below**.
+the checkpoint (§8)**.
 For row 0 the bootstrapper's `Cloudflare token packages.porta.codes-ci` summary
 line is just its suggested token name — the §3b name is fine.
 
-**Rows 1–7 — Environment-scoped domains.**
+After row 0: stop, tell me "row 0 done" (checkpoint rule, §8).
 
-For **each row**, in the listed directory:
+## 6. Batch K — the new keys and the read token (one sitting, no BWS)
 
-Through the repository's canonical `make bws-bootstrap` surface
-(makefile.capability-verbs). `APP_NAME` is the domain's BWS project; the
-loader is the default `.github/actions/load-secrets/action.yml`, where the
-bootstrapper rewrites only this domain's `<placeholder> > <secret>` line:
+Do §2 (generate the six new keys into one fresh 0700 directory) and §3 (the
+candidate-read PAT) now, in the same terminal you will use for Batches A and B,
+so `$KEYS` stays set:
 
 ```sh
+cd /Users/portaj/devel/portaj/packages.porta.codes
+git switch main && git pull --ff-only
+KEYS=~/ppc-keys-$(date +%F)                 # must not exist yet
+bash scripts/provision/generate-keys.sh "$KEYS"
+```
+
+Tell me the `$KEYS` path with "batch K done" (the path and the printed
+fingerprints are public). I copy **only** the public files from it —
+`*.pub.asc` and `*-trust-store.json` — and never open a `.sec.asc` or `.pem`.
+Keep the PAT page open (or create it during Batch B); it is pasted only into the
+vault.
+
+## 7. Batch A — one domain in each repository (four rows, any order)
+
+These four rows are in four different repositories, so they share no loader
+file and can run back to back without a checkpoint between them. For each row,
+in the same terminal (with `$KEYS` set):
+
+```sh
+read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN   # BWS ADMIN token, once per terminal
 cd <directory>
 git switch main && git pull --ff-only && git switch -c jp/c/bws-<domain>
 make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
@@ -188,97 +218,132 @@ make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
   --project-id-file .bws/<domain>.env --gh-environments <environment> --no-secret-values" # (b) create
 ```
 
-(b) creates the BWS project `<project>`, then prints the web-UI steps for the
-machine account. Its summary always includes a line `Cloudflare token
-<project>-ci`: that is only the name it would suggest for a Cloudflare token.
-Rows 1–7 declare no Cloudflare secret, so ignore it there; create no other
-Cloudflare token. Do exactly these in the Bitwarden web vault:
+| Row | `<directory>` | `<domain>` | `<project>` | Machine account | `<environment>` (deploys from) | Service secret ← value |
+|---|---|---|---|---|---|---|
+| A1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages.porta.codes-repo-signing` | `packages.porta.codes-repo-signing-ci` | `repository-signing` (branch `main`) | `PACKAGES_REPO_SIGNING_KEY` ← contents of `$KEYS/repository.sec.asc` |
+| A2 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `kioskd-rpm-signing-ci` | `rpm-signing` (tag `v*` only) | `KIOSKD_RPM_SIGNING_KEY` ← contents of `$KEYS/kioskd-rpm.sec.asc` |
+| A3 | `/Users/portaj/devel/portaj/corpus` | `rpm-signing` | `corpus-rpm-signing` | `corpus-rpm-signing-ci` | `rpm-signing` (branch `main`) | `CORPUS_RPM_SIGNING_KEY` ← contents of `$KEYS/corpus-rpm.sec.asc` |
+| A4 | `/Users/portaj/devel/portaj/keysprout` | `rpm-signing` | `keysprout-rpm-signing` | `keysprout-rpm-signing-ci` | `rpm-signing` (branch `main`) | `KEYSPROUT_RPM_SIGNING_KEY` ← contents of `$KEYS/keysprout-rpm.sec.asc` |
 
-1. Secrets Manager → Machine accounts → New → name **`<project>-ci`**.
-2. Projects tab of that machine account → add **only** `<project>` with
-   **Can read** (never "Can read, write"; no other project).
-3. Access tokens → New → name `GITHUB_ACTIONS`, no expiry change needed →
-   copy it and paste it at the bootstrapper's **hidden** prompt. The
-   bootstrapper stores it as the **Environment secret** `BWS_ACCESS_TOKEN` of
-   `<environment>` only (never the repository secret).
-4. Projects → `<project>` → New secret → name exactly `<secret>`, value = the
-   CONTENTS of the file in the last column (open it in a text editor, copy,
-   paste; multi-line armor is fine), or the PAT for row 2.
+Expected preview (a): `BWS project name <project>`, `BWS machine acct
+<project>-ci`, "would ensure GH Environment secret BWS_ACCESS_TOKEN in:
+<environment>", and the one `Checking BWS secret: <secret>` line. Its
+`Cloudflare token <project>-ci` line is only a suggested name — these domains
+declare no Cloudflare secret; create none.
 
-Then re-run (b) once more: it finds the secret and fills the placeholder UUIDs
-in `.bws/<domain>.env` and in this domain's line of
-`.github/actions/load-secrets/action.yml`. Then **stop at the checkpoint**.
+When (b) stops for the machine-account token, in the Bitwarden web vault
+(Secrets Manager):
 
-### The checkpoint — after EVERY row, before the next row in the same repository
+1. **Machine accounts → New** → name exactly the row's machine account.
+2. Its **Projects** tab → add **only** `<project>`, **Can read** (never "Can
+   read, write"; no other project).
+3. Its **Access tokens** → New → name `GITHUB_ACTIONS` → copy it and paste it at
+   the bootstrapper's **hidden** prompt. It becomes the **Environment** secret
+   `BWS_ACCESS_TOKEN` of `<environment>` in that repository only.
+4. **Projects → `<project>` → New secret** → name exactly the row's secret;
+   value = the CONTENTS of the row's file (open it in a text editor, copy,
+   paste; multi-line armor is fine).
 
-Several domains share one loader file: rows 0, 1 and 2 (packages.porta.codes),
-rows 4 and 5 (corpus), rows 6 and 7 (keysprout). The bootstrapper refuses to
-edit a loader that has uncommitted changes, so running the next row on top of
-the previous row's uncommitted fill would leave the next UUID unfilled. So,
-after each row:
+Then re-run (b) once: it finds the secret and fills the placeholder IDs. Check
+and leave them uncommitted:
 
-1. **You stop** and tell me "row N done". Leave the fill (IDs only — no
-   secret) uncommitted in that clone.
-2. **I** commit exactly `.github/actions/load-secrets/action.yml` and that
-   row's `.bws/<domain>.env` (or `.env-sample` for row 0) from your clone onto
-   its `jp/c/bws-<domain>` branch, open the PR, take it through review and
-   merge it.
-3. **You** start the next row of that repository from a clean, updated main:
-   `git switch main && git pull --ff-only` (the row's own command then creates
-   the next branch).
+```sh
+git status --short    # expect exactly: M .bws/<domain>.env  and  M .github/actions/load-secrets/action.yml
+```
 
-Rows in different repositories do not share a loader and may run in any order
-between checkpoints. `tests/bws-loader-bootstrap.sh` walks rows 0–2 through the
-real bootstrapper with recording fakes: without the checkpoint the next row
-refuses to edit the loader; with it, every row fills its own line and leaves
-the others intact.
+After all four rows: tell me **"batch A done"**. Keep the terminal (and
+`$KEYS`) open.
 
-| # | Directory | `<domain>` | `<project>` (machine account `<project>-ci`) | `<environment>` | `<secret>` ← value |
-|---|---|---|---|---|---|
-| 1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages.porta.codes-repo-signing` | `repository-signing` | `PACKAGES_REPO_SIGNING_KEY` ← `$KEYS/repository.sec.asc` |
-| 2 | `/Users/portaj/devel/portaj/packages.porta.codes` | `candidate-ingest` | `packages.porta.codes-candidate-ingest` | `candidate-ingest` | `PACKAGES_CANDIDATE_READ_TOKEN` ← the §3 PAT |
-| 3 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `rpm-signing` | `KIOSKD_RPM_SIGNING_KEY` ← `$KEYS/kioskd-rpm.sec.asc` |
-| 4 | `/Users/portaj/devel/portaj/corpus` | `rpm-signing` | `corpus-rpm-signing` | `rpm-signing` | `CORPUS_RPM_SIGNING_KEY` ← `$KEYS/corpus-rpm.sec.asc` |
-| 5 | `/Users/portaj/devel/portaj/corpus` | `release-signing` | `corpus-release-signing` | `release-signing` | `CORPUS_RELEASE_SIGNING_KEY` ← `$KEYS/corpus-release.pem` |
-| 6 | `/Users/portaj/devel/portaj/keysprout` | `rpm-signing` | `keysprout-rpm-signing` | `rpm-signing` | `KEYSPROUT_RPM_SIGNING_KEY` ← `$KEYS/keysprout-rpm.sec.asc` |
-| 7 | `/Users/portaj/devel/portaj/keysprout` | `release-signing` | `keysprout-release-signing` | `release-signing` | `KEYSPROUT_RELEASE_SIGNING_KEY` ← `$KEYS/keysprout-release.pem` |
+## 8. Checkpoint — I commit, review and merge (you wait)
 
-The producers' `scripts/bws/bootstrap.sh` must be the 1.9.1 category (the
-declaration PRs re-sync it where older; `--gh-environments` needs it).
+Every repository has ONE loader, and the bootstrapper refuses to edit a loader
+with uncommitted changes, so Batch B starts only after these merge. From your
+clones, I commit exactly (IDs and public material only — no secret):
+
+| Repository | ID-fill PR (branch `jp/c/bws-<domain>`) | Public material I add (from `$KEYS`, public files only) |
+|---|---|---|
+| packages.porta.codes | `.github/actions/load-secrets/action.yml`, `.bws/repository-signing.env` | `keys/repository.asc`, `keys/kioskd-rpm.asc`, `keys/corpus-rpm.asc`, `keys/keysprout-rpm.asc`, `keys/candidates/corpus.json`, `keys/candidates/keysprout.json`, fingerprints in `inventory/layout.json` (separate PR) |
+| kioskd | `.github/actions/load-secrets/action.yml`, `.bws/rpm-signing.env` | into kioskd#32: `packaging/keys/kioskd-rpm.asc`, `packaging/keys/kioskd-rpm.fingerprint` |
+| corpus | `.github/actions/load-secrets/action.yml`, `.bws/rpm-signing.env` | into corpus#282: `packaging/keys/corpus-rpm.pub.asc`, `packaging/keys/corpus-rpm.fingerprint`, `release-trusted-keys.json` (= `corpus-trust-store.json`) |
+| keysprout | `.github/actions/load-secrets/action.yml`, `.bws/rpm-signing.env` | into keysprout#202: `packaging/keys/keysprout-rpm.asc`, `packaging/keys/keysprout-rpm.fpr`, `release-trusted-keys.json` (= `keysprout-trust-store.json`) |
+
+(Row 0's checkpoint is the same, with `.env-sample` instead of a `.bws/*.env`.)
+I take each PR through review and merge the ID-fill PRs; the ceremony PRs merge
+only when all their keys, trust stores and Environment tokens are in place. I
+then tell you **"batch B ready"**.
+
+## 9. Batch B — the second domain in each repository (three rows)
+
+Same terminal and commands as §7 (each row starts from a freshly pulled `main`,
+so the merged Batch A fill is already in the loader):
+
+| Row | `<directory>` | `<domain>` | `<project>` | Machine account | `<environment>` (deploys from) | Service secret ← value |
+|---|---|---|---|---|---|---|
+| B1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `candidate-ingest` | `packages.porta.codes-candidate-ingest` | `packages.porta.codes-candidate-ingest-ci` | `candidate-ingest` (branch `main`) | `PACKAGES_CANDIDATE_READ_TOKEN` ← the §3 PAT |
+| B2 | `/Users/portaj/devel/portaj/corpus` | `release-signing` | `corpus-release-signing` | `corpus-release-signing-ci` | `release-signing` (branch `main`) | `CORPUS_RELEASE_SIGNING_KEY` ← contents of `$KEYS/corpus-release.pem` |
+| B3 | `/Users/portaj/devel/portaj/keysprout` | `release-signing` | `keysprout-release-signing` | `keysprout-release-signing-ci` | `release-signing` (branch `main`) | `KEYSPROUT_RELEASE_SIGNING_KEY` ← contents of `$KEYS/keysprout-release.pem` |
+
+Vault steps 1–4 exactly as in §7; re-run (b); `git status --short` shows the
+row's `.bws/<domain>.env` and the loader. Then end the BWS session — but
+**keep `$KEYS`**:
+
+```sh
+unset BWS_ACCESS_TOKEN      # the admin token is no longer needed
+```
+
+and tell me **"batch B done"**. I commit those three ID fills the same way as
+§8, then verify (§10). `$KEYS` holds the only copy of each private key outside
+the vault until that verification passes, so do **not** delete it yet.
 
 Only row 0 sets a repository-level `BWS_ACCESS_TOKEN`, and only in
 packages.porta.codes (which has none today). Nothing here touches the `kioskd`
 / `corpus` / `keysprout` repository-level tokens, their existing BWS projects,
-or any existing secret.
+kioskd's existing candidate key, or any other existing secret. The producers'
+`scripts/bws/bootstrap.sh` is the 1.9.1 category (merged declaration PRs);
+every command in §7 and §9 was checked with `--dry-run` against each
+repository's `main`.
 
-## 5. Verification (metadata only)
+## 10. Verification — before any key is deleted (I do this)
 
-In each directory, per row, the read-only inventory — it reads project and
-secret NAMES and GitHub secret NAMES, never a value:
+For each row, read-only: project and secret NAMES and GitHub secret NAMES,
+never a value:
 
 ```sh
-make bws-bootstrap ARGS="--plan"                                                    # row 0
-gh secret list --repo JonathanPorta/packages.porta.codes                            # expect: BWS_ACCESS_TOKEN (and no AWS_*)
 make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
-  --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"        # rows 1–7
-gh api repos/JonathanPorta/<repo>/environments/<environment>/secrets --jq '.secrets[].name'   # expect: BWS_ACCESS_TOKEN
+  --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"
+gh api repos/JonathanPorta/<repo>/environments/<environment>/secrets --jq '.secrets[].name'   # expect exactly: BWS_ACCESS_TOKEN
 ```
 
-I then confirm from my side, without any secret: each loader's UUIDs are real,
-each Environment has exactly one secret and one deployment policy, and a
-dry signing job in each domain reports only the loaded key's **fingerprint**.
+I then confirm: each loader's IDs are real (no placeholder left), each
+Environment has exactly one secret and its one deployment policy, and a dry
+signing run in each domain — the real loader, the real Environment token, the
+vault secret — signs a throwaway input and reports only the signing key's
+**fingerprint** (Ed25519: its public key), which must equal the one Batch K
+printed for that domain.
 
-## 6. Cleanup
+- **All six match:** I tell you **"cleanup authorized"** → do §11.
+- **One does not** (a truncated or wrong paste still passes the
+  bootstrapper's name/ID lookup): I name the domain and secret; you re-paste
+  the CONTENTS of that row's file from `$KEYS` into that secret in the web
+  vault (vault step 4 only — no bootstrapper run, no new token), tell me
+  "re-pasted <secret>", and I re-verify that domain. Nothing is deleted until
+  all six match.
+
+(The PAT and the Cloudflare token have no local copy to lose: a wrong one is
+replaced by minting a new one; they are verified by a read-only call — the PAT
+reads one producer's release, the Cloudflare token reads the `porta.codes`
+zone.)
+
+## 11. Cleanup — only after I say "cleanup authorized" (§10)
 
 ```sh
-unset BWS_ACCESS_TOKEN
 rm -P "$KEYS"/* && rmdir "$KEYS"      # macOS: overwrite, then delete
+unset BWS_ACCESS_TOKEN                # harmless if already unset
 ```
 
-Keep no other copy of any private file. Tell me "provisioning done" — nothing
-more is needed in chat.
+Keep no other copy of any private file or of the PAT.
 
-## 7. Admission PRs and the required check (proved, not assumed)
+## 12. Admission PRs and the required check (proved, not assumed)
 
 `admit-candidate.yml` opens each admission PR with `GITHUB_TOKEN`; GitHub does
 not start `pull_request` workflows for events caused by `GITHUB_TOKEN`, so the
@@ -295,7 +360,7 @@ used as proof.
 3. No PR-opening credential exists or is requested unless (2) demonstrably
    fails; if it does, I bring that evidence with a single request.
 
-## 8. AWS: three OIDC roles, bootstrap-owned (I run it with your SSO session)
+## 13. AWS: three OIDC roles, bootstrap-owned (I run it with your SSO session)
 
 No AWS key exists for this repository. The roles are created by the
 **operator's identity**, never by one a workflow can reach (#239), with
