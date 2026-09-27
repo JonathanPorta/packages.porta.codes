@@ -68,7 +68,7 @@ runs:
         INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
         INPUT_SECRETS: |
           6c68ee9e-c577-44c5-a5e6-b458007ddc2a > CLOUDFLARE_ACCOUNT_ID
-          00000000-0000-0000-0000-000000000000 > CLOUDFLARE_API_TOKEN
+          2d85b8c5-fca9-47cc-8fbd-b4d2001785d2 > CLOUDFLARE_API_TOKEN
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
 
     # ── profile: candidate-ingest ── BWS project packages.porta.codes-candidate-ingest,

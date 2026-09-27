@@ -36,8 +36,19 @@ mkdir -p "$R" "$BIN"
 LOADER=.github/actions/load-secrets/action.yml
 SHARED_ACCOUNT_ID=6c68ee9e-c577-44c5-a5e6-b458007ddc2a
 
-# A clean checkout of exactly the committed files the walkthrough touches.
+# A checkout of exactly the files the walkthrough touches, put back into its
+# UNPROVISIONED state explicitly: the committed files carry real ids once a
+# row has been provisioned, and the test must not depend on how far live
+# provisioning has got. Every per-domain loader id becomes the all-zero
+# placeholder (the shared _shared-ci account id is fixed, never provisioned),
+# and every project-id file its placeholder.
 (cd "$ROOT" && tar -cf - scripts/bws "$LOADER" .bws-secrets-list .env-sample .bws) | tar -xf - -C "$R"
+ZERO=00000000-0000-0000-0000-000000000000
+sed -i.bak -E "/$SHARED_ACCOUNT_ID/!s/^([[:space:]]*)[0-9a-fA-F-]{36}([[:space:]]+>[[:space:]]+[A-Z_]+[[:space:]]*)\$/\1$ZERO\2/" "$R/$LOADER"
+for f in "$R/.env-sample" "$R"/.bws/*.env; do
+  sed -i.bak -E "s/^(export BWS_PROJECT_ID=)\"[^\"]*\"/\1\"$ZERO\"/" "$f"
+done
+rm -f "$R/$LOADER.bak" "$R/.env-sample.bak" "$R"/.bws/*.env.bak
 git -C "$R" init -q
 git -C "$R" -c user.email=t@t -c user.name=t add -A
 git -C "$R" -c user.email=t@t -c user.name=t commit -qm base
@@ -128,6 +139,14 @@ if [ "$(idline PACKAGES_CANDIDATE_READ_TOKEN)" = "$(expected_id packages.porta.c
 fi
 if [ "$(idline CLOUDFLARE_API_TOKEN)" = "$t" ] && [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$(expected_id packages.porta.codes-repo-signing PACKAGES_REPO_SIGNING_KEY)" ]; then ok "…with every earlier mapping intact"; else no "…row 2 changed an earlier mapping"; fi
 if grep -q '00000000-0000-0000-0000-000000000000' "$R/$LOADER"; then no "a placeholder remains after all three rows"; else ok "after all three rows the loader holds no placeholder"; fi
+# Provisioned and idempotent: re-running row 0 on the fully provisioned,
+# committed loader changes nothing.
+commit "row 2"
+out="$(boot packages.porta.codes "CLOUDFLARE_API_TOKEN")"
+if git -C "$R" diff --quiet -- "$LOADER" .env-sample; then ok "re-running row 0 on a provisioned loader is a no-op"; else
+  no "re-running row 0 changed a provisioned loader"
+  git -C "$R" diff --stat | sed 's/^/      /'
+fi
 if grep -q 'fake-admin' "$GH_LOG"; then no "a token value reached a mutation argument"; else ok "no token value appears in any mutation argument"; fi
 
 echo "bws-loader-bootstrap: $pass passed, $fail failed"
