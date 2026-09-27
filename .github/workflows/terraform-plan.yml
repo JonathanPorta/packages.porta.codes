@@ -88,6 +88,11 @@ jobs:
       - name: 📋 Plan
         run: make plan
 
+      # The plan is bound to the COMMITTED lock file: init runs with
+      # -lockfile=readonly, and the apply job hashes the same committed bytes.
+      - name: 🔒 The lock file is the committed one
+        run: git diff --exit-code -- .terraform.lock.hcl
+
       - name: 🔗 Bind the plan to its source
         run: |
           set -euo pipefail

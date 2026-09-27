@@ -114,13 +114,13 @@ bws-load: ## Print local shell commands for loading BWS secrets
 export TF_VAR_cloudflare_account_id ?= $(CLOUDFLARE_ACCOUNT_ID)
 
 plan: ## Terraform plan (read-only, no state lock) → plan.tmp + plan.out
-	terraform init -input=false
+	terraform init -input=false -lockfile=readonly
 	terraform plan -input=false -lock=false -out=plan.tmp
 	terraform show -no-color plan.tmp > plan.out
 
 deploy: ## Apply exactly the reviewed plan.tmp (infrastructure only; packages are published by CI)
 	@[ -f plan.tmp ] || { echo "refusing: no plan.tmp — apply only a reviewed plan (terraform-apply.yml)"; exit 1; }
-	terraform init -input=false
+	terraform init -input=false -lockfile=readonly
 	terraform apply -input=false plan.tmp
 
 verify-edge: ## Live edge as approved: route fails closed, entrypoints routed no-cache, v2 pointer (needs CLOUDFLARE_API_TOKEN)

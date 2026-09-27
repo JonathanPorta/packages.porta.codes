@@ -5,6 +5,7 @@ provider "registry.terraform.io/betterstackhq/better-uptime" {
   version     = "0.3.20"
   constraints = "~> 0.3.15"
   hashes = [
+    "h1:+QS02YkNk4rAkXZDXH6yJBoJCgSVGlCLclM0zCnY2lY=",
     "h1:JJL3ZE4HZIAm48mbfuu+z2Mk71AHf2v9Xo8SVuvX5vU=",
     "zh:06a17cd46799eba8e46a824a7a8d45abb87aba2205268a0fd3fe35de5b5e7b26",
     "zh:3388fcd2e3554a4b59afb5c430d3f419d297bd5c1f837124014031d22631d0c4",
@@ -27,6 +28,7 @@ provider "registry.terraform.io/cloudflare/cloudflare" {
   constraints = "~> 5.0"
   hashes = [
     "h1:+GkpgNYiwEwYBCXgZbA2W+d05oeqOkfbOsOBj9xB9Vs=",
+    "h1:4Vr7vxzlhEJ/zBS7Y6Iao6aJMLCZPHjxfSmKGThifiA=",
     "zh:403d477c0e4c05a9f9886ef7e750dcc3488be7cd2210207e98b4a731bc499159",
     "zh:4a2a4659c3273ddb1437a34865eac21823a117557b050786ba510ac5f34047cf",
     "zh:6e4a2f6ed105b5353c7b56962d00f923873dd68af6509b9b9f595057edba1915",
@@ -43,6 +45,7 @@ provider "registry.terraform.io/hashicorp/aws" {
   version     = "4.8.0"
   constraints = "~> 4.8.0"
   hashes = [
+    "h1:T9Typ5V+dDwecG9USCLbW4oayxN3cxEGsG+OJzzjRgY=",
     "h1:dJ56emkurrpBFXVHO4fmcKpZJYIaxLugVKtlvR2OeYs=",
     "zh:16cbdbc03ad13358d12433e645e2ab5a615e3a3662a74e3c317267c9377713d8",
     "zh:1d813c5e6c21fe370652495e29f783db4e65037f913ff0d53d28515c36fbb70a",
