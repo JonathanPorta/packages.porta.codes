@@ -27,7 +27,7 @@ TOOLS_IMAGE ?= ppc-tools
 # must not change with the name of a checkout directory.
 APP_NAME ?= packages.porta.codes
 
-.PHONY: help deps install dev format check test build docs clean plan deploy verify-edge \
+.PHONY: help deps install dev format check test build docs clean plan deploy verify-edge verify-edge-route \
 	sync-scripts verify-scripts bws-bootstrap bws-load \
 	validate tools-image
 
@@ -125,3 +125,6 @@ deploy: ## Apply exactly the reviewed plan.tmp (infrastructure only; packages ar
 
 verify-edge: ## Live edge as approved: route fails closed, entrypoints routed no-cache, v2 pointer (needs CLOUDFLARE_API_TOKEN)
 	@bash scripts/surface/verify-edge.sh
+
+verify-edge-route: ## Only the route checks of verify-edge (right after deploy, before the first activation)
+	@bash scripts/surface/verify-edge.sh --route-only

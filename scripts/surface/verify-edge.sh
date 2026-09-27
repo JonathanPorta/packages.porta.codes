@@ -10,6 +10,10 @@
 #      x-pkgrepo-generation and Cache-Control: no-cache.
 #   3. The activation pointer is readable and is a v2 pointer.
 #
+# --route-only stops after check 1: right after the infrastructure is deployed,
+# before any generation is activated, the entrypoint and pointer checks (2, 3)
+# cannot pass yet. The full run is required after the first activation.
+#
 # Needs CLOUDFLARE_API_TOKEN with Zone → Workers Routes: Read on porta.codes
 # (read-only; the value is read from the environment, never an argument), curl
 # and jq. Exit 0 verified · 1 not as approved · 2 usage/tooling.
@@ -18,6 +22,15 @@ HOST="${PPC_HOST:-packages.porta.codes}"
 ZONE="${PPC_ZONE:-porta.codes}"
 SCRIPT="${PPC_ROUTER_SCRIPT:-packages-porta-codes-router}"
 ENTRYPOINT="${PPC_ENTRYPOINT:-keys/repository.asc}"
+route_only=0
+case "${1:-}" in
+  "") ;;
+  --route-only) route_only=1 ;;
+  *)
+    printf 'usage: verify-edge.sh [--route-only]\n' >&2
+    exit 2
+    ;;
+esac
 die() {
   printf 'verify-edge: %s\n' "$1" >&2
   exit 2
@@ -44,6 +57,10 @@ route="$(cf "zones/$zone_id/workers/routes" | jq -c --arg p "$HOST/*" '[.result[
 [ "$(jq -r '.[0].request_limit_fail_open' <<<"$route")" = false ] ||
   fail "route $HOST/* FAILS OPEN when the allowance is exhausted (request_limit_fail_open=true)"
 printf 'verify-edge: route %s/* → %s, fails closed (request_limit_fail_open=false)\n' "$HOST" "$SCRIPT"
+if [ "$route_only" = 1 ]; then
+  printf 'verify-edge: route-only — entrypoint and pointer checks not run (no generation activated yet)\n'
+  exit 0
+fi
 
 headers="$(curl -fsS -o /dev/null -D - "https://$HOST/$ENTRYPOINT" | tr -d '\r')" || fail "https://$HOST/$ENTRYPOINT is not served"
 gen="$(sed -n 's/^x-pkgrepo-generation: //Ip' <<<"$headers" | head -1)"

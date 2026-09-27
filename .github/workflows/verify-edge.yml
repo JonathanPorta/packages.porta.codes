@@ -1,0 +1,54 @@
+name: 🌐 Verify edge
+
+# Reads the live edge as the approved plan describes it (scripts/surface/
+# verify-edge.sh): the Worker route runs the router and FAILS CLOSED
+# (request_limit_fail_open=false, read from the Cloudflare API), and — in
+# `full` scope — a stable entrypoint is routed no-cache from the live
+# activation. Read-only: the default (Cloudflare) BWS domain's token only; no
+# AWS identity, no write. `route` scope is for the gap between the
+# infrastructure apply and the first activation.
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'route (before the first activation) or full'
+        required: true
+        type: choice
+        options: [route, full]
+
+permissions: {}
+
+jobs:
+  verify:
+    name: 🌐 verify-edge (${{ inputs.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: 🔒 main only
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::verify from main only, not $GITHUB_REF"; exit 1; }
+
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: 🔐 Load the Cloudflare credentials (default domain)
+        uses: ./.github/actions/load-secrets
+        with:
+          profile: default
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+
+      - name: 🌐 Verify
+        env:
+          SCOPE: ${{ inputs.scope }}
+        run: |
+          set -euo pipefail
+          case "$SCOPE" in
+            route) make verify-edge-route ;;
+            full) make verify-edge ;;
+            *) echo "::error::unknown scope $SCOPE"; exit 1 ;;
+          esac
