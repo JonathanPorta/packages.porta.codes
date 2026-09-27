@@ -132,7 +132,7 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
    (`keys/candidates/kioskd.json`).
 3. Commit the public halves and fingerprints (`keys/`, `inventory/layout.json`).
 4. For each authority domain, `make bws-bootstrap APP_NAME=<project> ARGS="…
-   --no-secret-values"` (PROVISIONING.md §4 has every command), then paste the
+   --no-secret-values"` (PROVISIONING.md §5–§9 has every command, grouped into row 0 and Batches K, A and B), then paste the
    value in the Bitwarden web UI:
 
    | Domain | BWS project / machine account | Environment | Secret |
