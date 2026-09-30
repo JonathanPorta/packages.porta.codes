@@ -1,0 +1,10 @@
+{
+  "schema": "blessed/signing-trust-store/v1",
+  "keys": {
+    "corpus-2026-01": {
+      "profile": "ed25519-detached-v1",
+      "public_key_base64": "xsE5b/cgVBXCiOWcL28244xx83EMH8tw/DmPv/HdMVY=",
+      "status": "active"
+    }
+  }
+}
