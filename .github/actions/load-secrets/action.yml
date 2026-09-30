@@ -29,6 +29,8 @@ inputs:
         default             Cloudflare only (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN)
         candidate-ingest    the producer candidate read token (PACKAGES_CANDIDATE_READ_TOKEN)
         repository-signing  the repository metadata signing key (PACKAGES_REPO_SIGNING_KEY)
+        admission-pr        this repository's admission-PR GitHub App (ADMISSION_PR_APP_CLIENT_ID,
+                            ADMISSION_PR_APP_PRIVATE_KEY) — admit-candidate.yml's open-pr job ONLY
       Anything else FAILS CLOSED.
     required: false
     default: default
@@ -47,9 +49,9 @@ runs:
       run: |
         set -euo pipefail
         case "$PROFILE" in
-          default | candidate-ingest | repository-signing) : ;;
+          default | candidate-ingest | repository-signing | admission-pr) : ;;
           *)
-            echo "::error::load-secrets: unknown profile '$PROFILE' (expected: default | candidate-ingest | repository-signing)"
+            echo "::error::load-secrets: unknown profile '$PROFILE' (expected: default | candidate-ingest | repository-signing | admission-pr)"
             exit 1
             ;;
         esac
@@ -93,4 +95,19 @@ runs:
         INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
         INPUT_SECRETS: |
           df98a8e5-07a6-4c0e-afcf-b4d5002e7843 > PACKAGES_REPO_SIGNING_KEY
+      run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
+
+    # ── profile: admission-pr ── BWS project packages.porta.codes-admission-pr,
+    # machine account packages.porta.codes-admission-pr-ci, Environment
+    # admission-pr (branch main). This repository's admission-PR GitHub App
+    # (blessed releases.release-pr@1 RP-6/RP-7): its client id and its private
+    # key, base64 on one line. Only admit-candidate.yml's open-pr job loads it.
+    - name: '🔐 Load the admission-PR App key'
+      if: ${{ inputs.profile == 'admission-pr' }}
+      shell: bash
+      env:
+        INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
+        INPUT_SECRETS: |
+          00000000-0000-0000-0000-000000000000 > ADMISSION_PR_APP_CLIENT_ID
+          00000000-0000-0000-0000-000000000000 > ADMISSION_PR_APP_PRIVATE_KEY
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"

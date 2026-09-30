@@ -69,6 +69,7 @@ check: verify-scripts validate ## Static checks: scripts, workflows, Terraform, 
 	bash tests/aws-oidc-bootstrap-env.sh
 	bash tests/bws-loader-bootstrap.sh
 	bash tests/bws-app-name.sh
+	bash tests/workflow-authority.sh
 	@if [ -d .terraform ]; then terraform validate; else echo "terraform validate: skipped (run terraform init with backend access first)"; fi
 
 # Internal (called by check): release-surfaces.yaml and, when present, the inventory.

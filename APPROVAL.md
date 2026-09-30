@@ -205,27 +205,37 @@ until kioskd#34 merges, then `branch main` (see PROVISIONING.md §0).
 
 ## 5. Admission PRs and required checks
 
-`admit-candidate.yml` opens each admission PR with `GITHUB_TOKEN`. GitHub does
-not start `pull_request` workflows for events caused by `GITHUB_TOKEN`, so the
-PR's required `CI` check will not appear on its own. DocSort already showed
-that a check produced by a `workflow_dispatch` run on the branch does **not**
-satisfy the PR ruleset, so that is not assumed to work here.
+**Owner-approved (2026-09-30), replacing the earlier close/reopen plan:** PRs
+that automation opens — this surface's admission PRs and the producers'
+release PRs — are opened by **dedicated GitHub Apps, one per repository and
+role (four Apps)**, per blessed `releases.release-pr@1` RP-6/RP-7
+(blessed-cicd #314). The evidence that forced the change: `GITHUB_TOKEN` cannot
+open PRs here — the first live admission,
+[run 36682670203](https://github.com/JonathanPorta/packages.porta.codes/actions/runs/36682670203),
+admitted corpus v1.64.1 and failed at *"GitHub Actions is not permitted to
+create or approve pull requests"* — and the repository setting that would allow
+it is forbidden as a workaround.
 
-Plan, with no new credential:
+| App | Installed on | Permissions | Key readable only by |
+|---|---|---|---|
+| admission-PR | packages.porta.codes | Contents · Pull requests: write | `admit-candidate.yml` `open-pr` (Environment `admission-pr`) |
+| kioskd / corpus / keysprout release-PR (one each) | its own producer | Contents · Pull requests · Issues: write | that producer's release-please job (Environment `release-pr`) |
 
-1. Prove it with **one real admission PR**: record the ruleset's required-check
-   state on that PR (`gh pr checks`, the merge box) as opened by `GITHUB_TOKEN`.
-2. Established mechanism first: the reviewing human **closes and reopens** the
-   PR (a human event, which starts `pull_request` CI on the exact head) as part
-   of the review they already give. Record whether the resulting `CI` check
-   satisfies the ruleset.
-3. Only if (2) does not satisfy the ruleset in practice, request one more
-   authority domain — `packages.porta.codes-admission-pr` with machine account
-   `packages.porta.codes-admission-pr-ci`, holding a fine-grained PAT (or App
-   token) limited to **Pull requests: write** and **Contents: write** on this
-   repository only — so the PR is opened by an identity whose events start CI.
-   That request comes with the evidence from (1) and (2); it is not part of this
-   approval.
+- **Rejected alternative: one release-PR App shared by the three producers.**
+  A minted token can be restricted to one repository, but the private key can
+  mint tokens for every repository the App is installed on, so a shared key in
+  three Environments would make a compromise of any one producer's PR-opening
+  job `contents: write` on the other two. One App per repository costs one
+  extra registration each; a leaked key reaches only the repository it serves.
+- Keys live in each repository's own BWS authority domain (§4 shape: project,
+  read-only `-ci` machine account, one Environment, default branch only),
+  base64 on one line; never readable by build, admission, packaging or signing
+  jobs.
+- Apps never review, are never CODEOWNERs or bypass actors; a PR they open runs
+  its required checks on its own, and independent review is unchanged.
+- No new credential service: BWS, the existing bootstrapper and
+  `actions/create-github-app-token` (SHA-pinned). The steps are PROVISIONING.md
+  §14; the proof is the first real App-opened PR in each repository.
 
 ## 6. Operating procedures
 

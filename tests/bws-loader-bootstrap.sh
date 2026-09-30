@@ -138,10 +138,19 @@ if [ "$(idline PACKAGES_CANDIDATE_READ_TOKEN)" = "$(expected_id packages.porta.c
   printf '%s\n' "$out" | tail -8 | sed 's/^/      /'
 fi
 if [ "$(idline CLOUDFLARE_API_TOKEN)" = "$t" ] && [ "$(idline PACKAGES_REPO_SIGNING_KEY)" = "$(expected_id packages.porta.codes-repo-signing PACKAGES_REPO_SIGNING_KEY)" ]; then ok "…with every earlier mapping intact"; else no "…row 2 changed an earlier mapping"; fi
-if grep -q '00000000-0000-0000-0000-000000000000' "$R/$LOADER"; then no "a placeholder remains after all three rows"; else ok "after all three rows the loader holds no placeholder"; fi
+commit "row 2"
+out="$(boot packages.porta.codes-admission-pr "ADMISSION_PR_APP_CLIENT_ID ADMISSION_PR_APP_PRIVATE_KEY" --secrets-list .bws/admission-pr.list \
+  --project-id-file .bws/admission-pr.env --gh-environments admission-pr)"
+if [ "$(idline ADMISSION_PR_APP_CLIENT_ID)" = "$(expected_id packages.porta.codes-admission-pr ADMISSION_PR_APP_CLIENT_ID)" ] &&
+  [ "$(idline ADMISSION_PR_APP_PRIVATE_KEY)" = "$(expected_id packages.porta.codes-admission-pr ADMISSION_PR_APP_PRIVATE_KEY)" ]; then ok "row 3 fills both admission-PR App lines"; else
+  no "row 3 did not fill the admission-PR App lines"
+  printf '%s\n' "$out" | tail -8 | sed 's/^/      /'
+fi
+if [ "$(idline PACKAGES_CANDIDATE_READ_TOKEN)" = "$(expected_id packages.porta.codes-candidate-ingest PACKAGES_CANDIDATE_READ_TOKEN)" ] && [ "$(idline CLOUDFLARE_API_TOKEN)" = "$t" ]; then ok "…with every earlier mapping intact"; else no "…row 3 changed an earlier mapping"; fi
+if grep -q '00000000-0000-0000-0000-000000000000' "$R/$LOADER"; then no "a placeholder remains after all four rows"; else ok "after all four rows the loader holds no placeholder"; fi
 # Provisioned and idempotent: re-running row 0 on the fully provisioned,
 # committed loader changes nothing.
-commit "row 2"
+commit "row 3"
 out="$(boot packages.porta.codes "CLOUDFLARE_API_TOKEN")"
 if git -C "$R" diff --quiet -- "$LOADER" .env-sample; then ok "re-running row 0 on a provisioned loader is a no-op"; else
   no "re-running row 0 changed a provisioned loader"

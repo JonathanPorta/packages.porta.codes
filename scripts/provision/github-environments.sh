@@ -2,7 +2,7 @@
 # github-environments.sh [--apply] — the GitHub Environments of every authority
 # domain in the pilot, each allowed ONLY the ref its trusted workflow runs on.
 #
-#   JonathanPorta/packages.porta.codes  repository-signing, candidate-ingest,
+#   JonathanPorta/packages.porta.codes  repository-signing, candidate-ingest, admission-pr,
 #                                       repository-publication,
 #                                       infrastructure-plan,
 #                                       infrastructure                → branch main
@@ -49,6 +49,7 @@ kioskd_rpm="$(printf '%s\n' "$wf" | kioskd_trigger)"
 ROWS=(
   "JonathanPorta/packages.porta.codes repository-signing branch main"
   "JonathanPorta/packages.porta.codes candidate-ingest branch main"
+  "JonathanPorta/packages.porta.codes admission-pr branch main"
   "JonathanPorta/packages.porta.codes repository-publication branch main"
   "JonathanPorta/packages.porta.codes infrastructure-plan branch main"
   "JonathanPorta/packages.porta.codes infrastructure branch main"

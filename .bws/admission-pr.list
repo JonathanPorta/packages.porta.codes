@@ -1,0 +1,12 @@
+# Authority domain: admission-pr (secrets.bwsm-authority-domains@1;
+# blessed releases.release-pr@1 RP-6/RP-7). BWS project
+# packages.porta.codes-admission-pr, machine account
+# packages.porta.codes-admission-pr-ci (read-only on this project only),
+# GitHub Environment admission-pr (allowed ref: main).
+# This repository's admission-PR GitHub App, installed on
+# JonathanPorta/packages.porta.codes ONLY (Contents: write, Pull requests:
+# write, Metadata: read; no webhook, no events). Read ONLY by
+# admit-candidate.yml's open-pr job. The client id, and the private key
+# base64-encoded on one line.
+ADMISSION_PR_APP_CLIENT_ID type:github_app_id
+ADMISSION_PR_APP_PRIVATE_KEY type:github_app_private_key

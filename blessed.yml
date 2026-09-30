@@ -31,6 +31,11 @@ standards:
   #   releases.surfaces@1, releases.package-repositories@1
   #                                      declared surface and tooling exist; no
   #                                      publication, read-back or replay yet.
+  #   releases.release-pr@1 (RP-6/RP-7, admission-PR role)
+  #                                      the admission-pr domain and the open-pr
+  #                                      job exist; the App is not registered
+  #                                      and no App-opened admission PR has run
+  #                                      its required checks yet.
 
 capabilities:
   - bwsm
@@ -195,6 +200,29 @@ secret_authorities:
     # this; it has no contents: write, no candidate token and no AWS identity.
     injects:
       - PACKAGES_REPO_SIGNING_KEY
+
+  admission-pr:
+    authority_type: bwsm
+    github_scope: environment
+    github_environment: admission-pr
+    github_secret: BWS_ACCESS_TOKEN
+    allowed_refs:
+      branches:
+        - main
+      tags: []
+    bwsm_project: packages.porta.codes-admission-pr
+    bwsm_allowed_projects:
+      - packages.porta.codes-admission-pr
+    machine_account: packages.porta.codes-admission-pr-ci
+    # This repository's admission-PR GitHub App (releases.release-pr@1 RP-6):
+    # installed on JonathanPorta/packages.porta.codes ONLY; Contents: write,
+    # Pull requests: write, Metadata: read; no webhook. Its key is read ONLY by
+    # admit-candidate.yml's open-pr job (RP-7), which mints a token for this
+    # repository and opens the admission PR; it is never a reviewer, CODEOWNER
+    # or ruleset bypass actor.
+    injects:
+      - ADMISSION_PR_APP_CLIENT_ID
+      - ADMISSION_PR_APP_PRIVATE_KEY
 
   repository-publication:
     authority_type: oidc
