@@ -1,0 +1,109 @@
+name: 🔏 Verify signing keys
+
+# PROVISIONING.md §10 (packages.porta.codes): prove that each key in the
+# Bitwarden vault is the key Batch K generated, WITHOUT any private key ever
+# leaving the vault or CI. One job per authority domain, each in that domain's
+# GitHub Environment and loading ONLY that domain's profile. The key moves
+# from the job environment into a shell variable that is unset before any
+# other process starts, and reaches only gpg/openssl (stdin or a process
+# substitution). Each job signs a throwaway input, prints ONLY the signer's
+# public identity (OpenPGP fingerprint / Ed25519 public key), and verifies the
+# signature with that public material. The operator compares the printed
+# values with the fingerprints Batch K printed. Read-only: no write, no
+# release, no artifact.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  repository_signing:
+    name: 🔏 repository-signing (PACKAGES_REPO_SIGNING_KEY)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: repository-signing
+    permissions:
+      contents: read
+    steps:
+      - name: 🔒 main only
+        run: |
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::verify from main only, not $GITHUB_REF"; exit 1; }
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 🔐 Load ONLY the repository-signing domain
+        uses: ./.github/actions/load-secrets
+        with:
+          profile: repository-signing
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+      - name: 🔏 Sign a throwaway input; print only the fingerprint
+        run: |
+          set -euo pipefail
+          # FIRST: no later step or post action may see it (the loader wrote it
+          # to GITHUB_ENV; `unset` alone only affects this shell).
+          echo "PACKAGES_REPO_SIGNING_KEY=" >>"$GITHUB_ENV"
+          k="${PACKAGES_REPO_SIGNING_KEY:-}"
+          unset PACKAGES_REPO_SIGNING_KEY
+          [ -n "$k" ] || { echo "::error::PACKAGES_REPO_SIGNING_KEY is empty"; exit 1; }
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          d="$(mktemp -d)"
+          trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME" "$d"' EXIT
+          chmod 700 "$GNUPGHOME"
+          printf '%s\n' "$k" | gpg --batch --quiet --import 2>/dev/null
+          k=""
+          n="$(gpg --batch --with-colons --list-secret-keys | grep -c '^sec:' || true)"
+          [ "$n" = 1 ] || { echo "::error::the secret holds $n primary keys, not exactly one"; exit 1; }
+          fpr="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^sec:/{p=1; next} p && /^fpr:/{print $10; exit}')"
+          echo "throwaway $GITHUB_RUN_ID" >"$d/in"
+          gpg --batch --yes --quiet --local-user "$fpr" --detach-sign --output "$d/in.sig" "$d/in"
+          gpg --batch --quiet --export "$fpr" >"$d/pub.gpg"
+          gpgv --keyring "$d/pub.gpg" "$d/in.sig" "$d/in" 2>/dev/null
+          echo "repository-signing PACKAGES_REPO_SIGNING_KEY fingerprint: $fpr (signed and verified)"
+          echo "### repository-signing: \`$fpr\` (signed and verified)" >>"$GITHUB_STEP_SUMMARY"
+      - name: 🧹 Scrub PACKAGES_REPO_SIGNING_KEY from the job environment (always)
+        if: always()
+        run: echo "PACKAGES_REPO_SIGNING_KEY=" >>"$GITHUB_ENV"
+  candidate_ingest_pat:
+    name: 🔏 candidate-ingest (PACKAGES_CANDIDATE_READ_TOKEN)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: candidate-ingest
+    permissions:
+      contents: read
+    steps:
+      - name: 🔒 main only
+        run: |
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::verify from main only, not $GITHUB_REF"; exit 1; }
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 🔐 Load ONLY the candidate-ingest domain
+        uses: ./.github/actions/load-secrets
+        with:
+          profile: candidate-ingest
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+      - name: 🔎 One read-only call per producer; print only status and count
+        run: |
+          set -euo pipefail
+          # FIRST: no later step or post action may see it (the loader wrote it
+          # to GITHUB_ENV; `unset` alone only affects this shell).
+          echo "PACKAGES_CANDIDATE_READ_TOKEN=" >>"$GITHUB_ENV"
+          t="${PACKAGES_CANDIDATE_READ_TOKEN:-}"
+          unset PACKAGES_CANDIDATE_READ_TOKEN
+          [ -n "$t" ] || { echo "::error::PACKAGES_CANDIDATE_READ_TOKEN is empty"; exit 1; }
+          for r in kioskd corpus keysprout; do
+            code="$(curl -sS -o "$RUNNER_TEMP/rel.json" -w '%{http_code}' -H @<(printf 'Authorization: Bearer %s\n' "$t") \
+              -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/JonathanPorta/$r/releases?per_page=5")"
+            n="$(jq 'if type == "array" then length else -1 end' "$RUNNER_TEMP/rel.json")"
+            rm -f "$RUNNER_TEMP/rel.json"
+            echo "candidate-ingest PACKAGES_CANDIDATE_READ_TOKEN: JonathanPorta/$r releases → HTTP $code, $n listed"
+            echo "### candidate-ingest: JonathanPorta/$r → HTTP $code, $n listed" >>"$GITHUB_STEP_SUMMARY"
+            [ "$code" = 200 ] || exit 1
+          done
+          t=""
+      - name: 🧹 Scrub PACKAGES_CANDIDATE_READ_TOKEN from the job environment (always)
+        if: always()
+        run: echo "PACKAGES_CANDIDATE_READ_TOKEN=" >>"$GITHUB_ENV"
