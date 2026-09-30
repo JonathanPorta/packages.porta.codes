@@ -117,12 +117,12 @@ while IFS=$'\t' read -r fname kind; do
       arch="$(dpkg-deb -f "$f" Architecture)"
       case "$full" in *:*) refuse "$fname has an epoch ($full); not supported" ;; *-*) ;; *) refuse "$fname has no Debian revision ($full)" ;; esac
       ver="${full%-*}" revn="${full##*-}"
-      repos="$("$JQ" -r --arg p "$producer" --arg a "$arch" '.repositories[] | select(.format == "apt" and .producer_repo == $p and ((.architectures | index($a)) != null or $a == "all")) | .id' "$base")"
+      repos="$("$JQ" -r --arg p "$producer" --arg a "$arch" '.repositories[] | select(.format == "apt" and .producer_repo == $p and ((.architectures | index($a)) != null or $a == "all")) | .id' "$layout")"
       ;;
     rpm)
       q="$(rpm -qp --nosignature --qf '%{NAME}\t%{VERSION}\t%{RELEASE}\t%{ARCH}' "$f" 2>/dev/null)" || refuse "$fname is not a readable RPM"
       IFS=$'\t' read -r name ver revn arch <<<"$q"
-      repos="$("$JQ" -r --arg p "$producer" --arg a "$arch" '.repositories[] | select(.format == "dnf" and .producer_repo == $p and (.arch == $a or $a == "noarch")) | .id' "$base")"
+      repos="$("$JQ" -r --arg p "$producer" --arg a "$arch" '.repositories[] | select(.format == "dnf" and .producer_repo == $p and (.arch == $a or $a == "noarch")) | .id' "$layout")"
       ;;
   esac
   "$JQ" -e --arg p "$producer" --arg n "$name" '.producers[$p].package_names | index($n) != null' "$policy" >/dev/null ||
@@ -146,7 +146,7 @@ while IFS=$'\t' read -r fname kind; do
   fi
   h="$(sha "$f")" s="$(size "$f")"
   for r in $repos; do
-    rpath="$("$JQ" -r --arg r "$r" '.repositories[] | select(.id == $r) | .path' "$base")"
+    rpath="$("$JQ" -r --arg r "$r" '.repositories[] | select(.id == $r) | .path' "$layout")"
     if [ "$kind" = deb ]; then
       file="${rpath}pool/main/${name:0:1}/$name/$fname"
     else
@@ -168,8 +168,14 @@ conflict="$("$JQ" -r --slurpfile n <("$JQ" -s . "$new") '
   [.packages // [] | .[]] as $old | $n[0][] as $e
   | ($old[] | select(.file == $e.file and .sha256 != $e.sha256) | .file)' "$base")"
 [ -z "$conflict" ] || refuse "already-admitted file(s) would change bytes: $(printf '%s' "$conflict" | tr '\n' ' ')"
-"$JQ" -S --slurpfile n <("$JQ" -s . "$new") '
-  .packages = ((.packages // []) + $n[0] | unique_by(.file) | sort_by(.repository, .name, .version, .revision, .file))' \
+# The layout declares the whole support matrix; the inventory carries only the
+# repositories that have admitted packages (an empty repository is refused,
+# never published — PR-14), in the layout's order. A repository joins the
+# inventory with its first admitted package.
+"$JQ" -S --slurpfile n <("$JQ" -s . "$new") --slurpfile l "$layout" '
+  .packages = ((.packages // []) + $n[0] | unique_by(.file) | sort_by(.repository, .name, .version, .revision, .file))
+  | ([.packages[].repository] | unique) as $used
+  | .repositories = [$l[0].repositories[] | select(.id as $i | $used | index($i))]' \
   "$base" >"$work/inv.json" || die "cannot merge the inventory"
 bash "$REL/validate-package-inventory.sh" --file "$work/inv.json" >/dev/null 2>"$work/v.err" || {
   sed 's/^/admit: /' "$work/v.err" >&2

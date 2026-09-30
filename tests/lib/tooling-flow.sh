@@ -77,7 +77,11 @@ jq --arg RK "$RK" --arg PK "$PK" '
       {id: "demo-rpm-x86-64", format: "dnf", path: "rpm/demo/x86_64/", product: "demo", producer_repo: "JonathanPorta/demo", channel: "stable",
        targets: [{distro: "fedora", release: "44"}], arch: "x86_64"},
       {id: "demo-rpm-aarch64", format: "dnf", path: "rpm/demo/aarch64/", product: "demo", producer_repo: "JonathanPorta/demo", channel: "stable",
-       targets: [{distro: "fedora", release: "44"}], arch: "aarch64"}]' "$REPO/inventory/layout.json" >"$R/inventory/layout.json"
+       targets: [{distro: "fedora", release: "44"}], arch: "aarch64"},
+      {id: "later-rpm-x86-64", format: "dnf", path: "rpm/later/x86_64/", product: "later", producer_repo: "JonathanPorta/later", channel: "stable",
+       targets: [{distro: "fedora", release: "44"}], arch: "x86_64"}]' "$REPO/inventory/layout.json" >"$R/inventory/layout.json"
+# (later-rpm-x86-64 belongs to a producer with nothing admitted yet: like the
+# live layout, which declares all three producers before any is admitted.)
 
 # ── demo packages and candidates ───────────────────────────────────────────
 B="$WORK/build"
@@ -150,8 +154,9 @@ cp "$DEB2" "$RPM2" "$REL/v1.1.0/"
 
 echo "── admission ──"
 if candidate "$WORK/c1" v1.0.0 "$WORK/cand.pem" "$DEB1" "$RPM1" && out="$(admit "$WORK/c1" v1.0.0 "$WORK/inv1.json" 2>&1)" &&
-  [ "$(jq '.packages | length' "$WORK/inv1.json")" = 3 ]; then
-  ok "a signed candidate is admitted: its .deb to the APT repository, its noarch RPM to both DNF architectures"
+  [ "$(jq '.packages | length' "$WORK/inv1.json")" = 3 ] &&
+  [ "$(jq -c '[.repositories[].id]' "$WORK/inv1.json")" = '["demo-apt","demo-rpm-x86-64","demo-rpm-aarch64"]' ]; then
+  ok "a signed candidate is admitted: its .deb to the APT repository, its noarch RPM to both DNF architectures; a layout repository with nothing admitted is left out"
 else
   bad "admission of a valid candidate failed"
   note "${out:-candidate assembly failed}"
