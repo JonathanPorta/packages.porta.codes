@@ -206,10 +206,14 @@ until kioskd#34 merges, then `branch main` (see PROVISIONING.md §0).
 ## 5. Admission PRs and required checks
 
 **Owner-approved (2026-09-30), replacing the earlier close/reopen plan:** PRs
-that automation opens — this surface's admission PRs and the producers'
-release PRs — are opened by **dedicated GitHub Apps, one per repository and
-role (four Apps)**, per blessed `releases.release-pr@1` RP-6/RP-7
-(blessed-cicd #314). The evidence that forced the change: `GITHUB_TOKEN` cannot
+that automation opens are opened by GitHub App identities in **two separately
+scoped roles**, per blessed `releases.release-pr@1` RP-6/RP-7 (blessed-cicd
+#314): **release-PR** (the producers' release PRs) and **admission-PR** (this
+surface's admission PRs). No token is shared across the roles.
+
+**Recommended implementation, pending the owner's confirmation in the
+consolidated provisioning package (PROVISIONING.md §14): one App per repository
+and role — four Apps.** The evidence that forced the change: `GITHUB_TOKEN` cannot
 open PRs here — the first live admission,
 [run 36682670203](https://github.com/JonathanPorta/packages.porta.codes/actions/runs/36682670203),
 admitted corpus v1.64.1 and failed at *"GitHub Actions is not permitted to
@@ -221,12 +225,14 @@ it is forbidden as a workaround.
 | admission-PR | packages.porta.codes | Contents · Pull requests: write | `admit-candidate.yml` `open-pr` (Environment `admission-pr`) |
 | kioskd / corpus / keysprout release-PR (one each) | its own producer | Contents · Pull requests · Issues: write | that producer's release-please job (Environment `release-pr`) |
 
-- **Rejected alternative: one release-PR App shared by the three producers.**
-  A minted token can be restricted to one repository, but the private key can
-  mint tokens for every repository the App is installed on, so a shared key in
-  three Environments would make a compromise of any one producer's PR-opening
-  job `contents: write` on the other two. One App per repository costs one
-  extra registration each; a leaked key reaches only the repository it serves.
+- **Alternative, for the owner to weigh: one release-PR App shared by the
+  three producers (two Apps in total).** A minted token can be restricted to
+  one repository, but the private key can mint tokens for every repository the
+  App is installed on, so a shared key in three Environments would make a
+  compromise of any one producer's PR-opening job `contents: write` on the
+  other two. The per-repository split costs one extra registration per
+  producer; a leaked key reaches only the repository it serves. The consumer
+  code is the same under either choice.
 - Keys live in each repository's own BWS authority domain (§4 shape: project,
   read-only `-ci` machine account, one Environment, default branch only),
   base64 on one line; never readable by build, admission, packaging or signing

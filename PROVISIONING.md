@@ -418,8 +418,11 @@ that run id (it refuses unless the plan is of `main`'s current HEAD).
 
 ## 14. GitHub Apps — one per repository and role (blessed `releases.release-pr@1` RP-6/RP-7)
 
-Four dedicated Apps, each installed on **exactly one** repository. None exists
-yet; you register them (GitHub web UI — the only way to create an App or its
+You approved two roles: a release-PR identity for the producers and an
+admission-PR identity for this surface. The recommended implementation, **for
+your confirmation in this package**, is four dedicated Apps, each installed on
+**exactly one** repository (the alternative and its risk: **Sharing**, below).
+None exists yet; you register them (GitHub web UI — the only way to create an App or its
 key), I prepare each consumer and verify.
 
 | App (suggested name) | Installed on (only) | Repository permissions | BWS project → machine account | Secrets (key types) | Environment (default branch only) | The ONE job that can read the key |
@@ -446,11 +449,14 @@ from earlier keyless jobs or the API. `tests/workflow-authority.sh` (in
 `make check`) enforces this for the admission App, with a mutation control per
 rule; each producer's adoption PR carries the same check.
 
-**No sharing.** One release App shared by the three producers was considered
-and rejected: its key would sit in three repositories' Environments, and a
-compromise of any one producer's PR-opening job would be `contents: write` on
-the other two. One App per repository costs one extra registration each and a
-leaked key reaches only the repository it already serves.
+**Sharing — your decision.** The alternative is one release-PR App shared by
+the three producers (two Apps in total). Its key would then sit in three
+repositories' Environments, and a compromise of any one producer's PR-opening
+job would be `contents: write` on the other two, whatever repository its
+tokens were requested for. The recommended split (four Apps) costs one extra
+registration per producer, and a leaked key reaches only the repository it
+already serves. The consumer code is identical either way; only which App's
+key goes in each producer's BWS project differs.
 
 **Preconditions (me, before each App is installed):** the consumer's adoption PR
 is merged (its `.bws/<domain>.list/.env`, loader profile and PR-opening job
