@@ -57,14 +57,21 @@ verified and published in CI.
 
 ## Install
 
-_Fingerprints are published here when the keys are provisioned._
+Keys (verify before trusting; each file holds exactly one primary key):
+
+| Key | Signs | Fingerprint |
+|---|---|---|
+| [`keys/repository.asc`](https://packages.porta.codes/keys/repository.asc) | APT `InRelease`/`Release.gpg`, DNF `repomd.xml.asc` | `6D5D 541B 16FB CC2A 5D91  54AF 09FE 69FC B50F 9CCC` |
+| [`keys/kioskd-rpm.asc`](https://packages.porta.codes/keys/kioskd-rpm.asc) | kioskd RPMs | `D538 A309 977D 20C2 336C  BD0E 3571 EED5 965B F604` |
+| [`keys/corpus-rpm.asc`](https://packages.porta.codes/keys/corpus-rpm.asc) | corpus RPMs | `FBDC A9A2 C22D FC3F 90D4  3CEB 24DD 0B11 8136 66B6` |
+| [`keys/keysprout-rpm.asc`](https://packages.porta.codes/keys/keysprout-rpm.asc) | keysprout RPMs | `EE19 E825 7732 75DD DF89  9201 8C46 C3B7 FAB0 61CF` |
 
 **Debian 13 / Raspberry Pi OS (trixie)** — kioskd, corpus:
 
 ```sh
 sudo install -d -m 0755 /etc/apt/keyrings
 sudo curl -fsSLo /etc/apt/keyrings/packages-repository.asc https://packages.porta.codes/keys/repository.asc
-gpg --show-keys /etc/apt/keyrings/packages-repository.asc   # expect: <REPOSITORY KEY FINGERPRINT>
+gpg --show-keys /etc/apt/keyrings/packages-repository.asc   # expect: 6D5D541B16FBCC2A5D9154AF09FE69FCB50F9CCC
 sudo curl -fsSLo /etc/apt/sources.list.d/kioskd.sources https://packages.porta.codes/apt/kioskd/kioskd.sources
 sudo apt update && sudo apt install kioskitd
 ```

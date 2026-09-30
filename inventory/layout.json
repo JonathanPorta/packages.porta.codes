@@ -2,11 +2,11 @@
   "schema": "blessed/package-repository-inventory/v1",
   "surface_id": "packages",
   "public_base_url": "https://packages.porta.codes/",
-  "repository_key": {"fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/repository.asc"},
+  "repository_key": {"fingerprint": "6D5D541B16FBCC2A5D9154AF09FE69FCB50F9CCC", "public_key_path": "keys/repository.asc"},
   "producer_keys": [
-    {"producer_repo": "JonathanPorta/kioskd", "fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/kioskd-rpm.asc"},
-    {"producer_repo": "JonathanPorta/corpus", "fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/corpus-rpm.asc"},
-    {"producer_repo": "JonathanPorta/keysprout", "fingerprint": "PENDING-PROVISIONING", "public_key_path": "keys/keysprout-rpm.asc"}
+    {"producer_repo": "JonathanPorta/kioskd", "fingerprint": "D538A309977D20C2336CBD0E3571EED5965BF604", "public_key_path": "keys/kioskd-rpm.asc"},
+    {"producer_repo": "JonathanPorta/corpus", "fingerprint": "FBDCA9A2C22DFC3F90D43CEB24DD0B11813666B6", "public_key_path": "keys/corpus-rpm.asc"},
+    {"producer_repo": "JonathanPorta/keysprout", "fingerprint": "EE19E825773275DDDF8992018C46C3B7FAB061CF", "public_key_path": "keys/keysprout-rpm.asc"}
   ],
   "repositories": [
     {"id": "kioskd-apt", "format": "apt", "path": "apt/kioskd/", "product": "kioskd", "producer_repo": "JonathanPorta/kioskd", "channel": "stable",

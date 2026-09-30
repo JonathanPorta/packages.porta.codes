@@ -1,0 +1,10 @@
+{
+  "schema": "blessed/signing-trust-store/v1",
+  "keys": {
+    "keysprout-2026-01": {
+      "profile": "ed25519-detached-v1",
+      "public_key_base64": "ufJWu8g1VjOVmAT07RMR8ucbpKtp7rxSyvoTFcYRbSA=",
+      "status": "active"
+    }
+  }
+}
