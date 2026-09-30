@@ -6,12 +6,13 @@ the read-only Worker, the scoped AWS publisher role, and the separated BWS
 signing and ingestion domains; the candidate-read token (Contents: read on the
 three producers only). Corrections, now applied below and in the code:
 
-1. **Environments match each producer's trusted release workflow** — every
-   producer Environment allows branch `main` only; no Environment is broadened
-   (`scripts/provision/github-environments.sh`). (kioskd's `rpm-signing` was
-   tag `v*` until the owner directed, 2026-09-30, that releases never need a
-   manually pushed tag: kioskd#34 releases from a reviewed release PR on `main`
-   and the workflow creates the tag.)
+1. **Environments match each producer's trusted release workflow** — corpus
+   and keysprout Environments allow branch `main` only; kioskd's `rpm-signing`
+   follows kioskd's merged release trigger: `tag v*` while kioskd's `main`
+   releases on `v*` tags, exactly `branch main` once kioskd#34 (reviewed
+   release PR on `main`; the workflow creates the tag — owner direction
+   2026-09-30) is merged. No Environment is broadened
+   (`scripts/provision/github-environments.sh` derives kioskd's policy).
 2. **The Worker's ORIGIN is the certificate-valid HTTPS S3 REST endpoint**
    (path-style), never the HTTP website endpoint.
 3. **The Worker route fails closed** when the Free plan allowance is exhausted;
@@ -186,8 +187,9 @@ existing key.
 | AWS (Terraform plan/apply, publication) | **none — GitHub OIDC** to the roles in §3; no AWS key exists | Environments `infrastructure-plan`, `infrastructure`, `repository-publication` | — |
 
 Environment deployment policies match each trusted release workflow exactly:
-`main` for this repository's five Environments and for every producer
-Environment, kioskd's `rpm-signing` included (see PROVISIONING.md §0).
+`main` for this repository's five Environments and for corpus and keysprout;
+kioskd's `rpm-signing` follows kioskd's merged release trigger — `tag v*`
+until kioskd#34 merges, then `branch main` (see PROVISIONING.md §0).
 
 ### Ordered steps
 

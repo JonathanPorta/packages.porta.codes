@@ -221,7 +221,7 @@ make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
 | Row | `<directory>` | `<domain>` | `<project>` | Machine account | `<environment>` (deploys from) | Service secret ← value |
 |---|---|---|---|---|---|---|
 | A1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages.porta.codes-repo-signing` | `packages.porta.codes-repo-signing-ci` | `repository-signing` (branch `main`) | `PACKAGES_REPO_SIGNING_KEY` ← contents of `$KEYS/repository.sec.asc` |
-| A2 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `kioskd-rpm-signing-ci` | `rpm-signing` (branch `main`) | `KIOSKD_RPM_SIGNING_KEY` ← contents of `$KEYS/kioskd-rpm.sec.asc` |
+| A2 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `kioskd-rpm-signing-ci` | `rpm-signing` (follows kioskd's release trigger — §0) | `KIOSKD_RPM_SIGNING_KEY` ← contents of `$KEYS/kioskd-rpm.sec.asc` |
 | A3 | `/Users/portaj/devel/portaj/corpus` | `rpm-signing` | `corpus-rpm-signing` | `corpus-rpm-signing-ci` | `rpm-signing` (branch `main`) | `CORPUS_RPM_SIGNING_KEY` ← contents of `$KEYS/corpus-rpm.sec.asc` |
 | A4 | `/Users/portaj/devel/portaj/keysprout` | `rpm-signing` | `keysprout-rpm-signing` | `keysprout-rpm-signing-ci` | `rpm-signing` (branch `main`) | `KEYSPROUT_RPM_SIGNING_KEY` ← contents of `$KEYS/keysprout-rpm.sec.asc` |
 
