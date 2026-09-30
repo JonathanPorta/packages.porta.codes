@@ -442,7 +442,8 @@ any code that can read an App's **private key** can mint tokens for **every**
 repository the App is installed on. The boundary is therefore who can read the
 key — which is why each App is installed on one repository, and why its key is
 readable only by one job: the only job that declares that Environment and loads
-that loader profile, which checks out nothing but the secret loader, runs no
+that loader profile, which checks out nothing but the secret loader (and, here, the API-only PR
+script), runs no
 build, admission, packaging, RPM-finalization or candidate-signing step, and
 receives what it commits (an admitted inventory, a release-please change set)
 from earlier keyless jobs or the API. `tests/workflow-authority.sh` (in
@@ -507,4 +508,3 @@ tell me "<App> done": I commit them through review, then prove the App with its
 real first PR (admission: the first admission PR; producers: their first
 release PR) — the PR's author is the App and its required checks ran. Only
 then delete that `.pem` (`rm -P <file>.pem`).
-

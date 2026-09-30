@@ -150,7 +150,8 @@ jobs:
           set -euo pipefail
           [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::admission PRs are opened from main only, not $GITHUB_REF"; exit 1; }
 
-      # The secret loader only: no product or admission code runs in this job.
+      # The secret loader and the PR script only: no product or admission code
+      # runs in this job.
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           ref: ${{ github.sha }}
@@ -158,6 +159,7 @@ jobs:
           sparse-checkout: |
             .github/actions/load-secrets
             scripts/bws
+            scripts/surface/admission-open-pr.sh
           sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
@@ -216,9 +218,10 @@ jobs:
           d="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
           { echo "ADMISSION_PR_APP_PEM<<$d"; echo; echo "$d"; echo "ADMISSION_PR_APP_PRIVATE_KEY="; echo "ADMISSION_PR_APP_CLIENT_ID="; } >>"$GITHUB_ENV"
 
-      # Branch, commit and PR through the API with the App token. Idempotent:
-      # a branch or open PR that already holds exactly this inventory is a
-      # no-op; one that holds anything else is refused, never overwritten.
+      # Branch, commit and PR through the API with the App token. Exact scope:
+      # the branch is one commit on main changing only the inventory, its PR a
+      # same-repository PR into main at that commit. An exact retry is a no-op;
+      # anything else is refused, never overwritten or proposed.
       - name: 📝 Branch, commit, PR
         if: steps.gate.outputs.open == 'true'
         env:
@@ -227,38 +230,6 @@ jobs:
           TAG: ${{ inputs.tag }}
           SELF: ${{ github.repository }}
           BASE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          branch="admit/${REPO#*/}-$TAG"
-          want="$(sha256sum out/inventory.json | cut -d' ' -f1)"
-          if gh api "repos/$SELF/git/ref/heads/$branch" --silent 2>/dev/null; then
-            have="$(gh api "repos/$SELF/contents/inventory/inventory.json?ref=$branch" --jq .content | base64 -d | sha256sum | cut -d' ' -f1)"
-            [ "$have" = "$want" ] || { echo "::error::branch $branch already exists with a DIFFERENT inventory; refusing to overwrite it"; exit 1; }
-            echo "::notice::branch $branch already holds exactly this inventory"
-          else
-            gh api -X POST "repos/$SELF/git/refs" -f ref="refs/heads/$branch" -f sha="$BASE_SHA" >/dev/null
-            old=""
-            if gh api "repos/$SELF/contents/inventory/inventory.json?ref=$branch" --silent 2>/dev/null; then
-              old="$(gh api "repos/$SELF/contents/inventory/inventory.json?ref=$branch" --jq .sha)"
-            fi
-            args=(-X PUT "repos/$SELF/contents/inventory/inventory.json" -f message="feat: admit $REPO $TAG" -f branch="$branch"
-              -f content="$(base64 -w0 out/inventory.json)")
-            [ -z "$old" ] || args+=(-f sha="$old")
-            gh api "${args[@]}" >/dev/null
-          fi
-          existing="$(gh pr list --repo "$SELF" --head "$branch" --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            echo "::notice::PR #$existing already proposes $branch"
-            exit 0
-          fi
-          {
-            echo "Admits \`$REPO\` \`$TAG\` into the package inventory (blessed releases.package-repositories@1 PR-2/PR-3)."
-            echo
-            echo "Opened by this repository's admission-PR GitHub App (releases.release-pr@1 RP-6), so the required checks run on their own. Merging this PR is the approval; publish.yml does the rest."
-            echo
-            echo "Admission log:"
-            echo '```'
-            cat out/admission.log
-            echo '```'
-          } >body.md
-          gh pr create --repo "$SELF" --base main --head "$branch" --title "feat: Admit ${REPO#*/} $TAG" --body-file body.md
+          INVENTORY: out/inventory.json
+          ADMISSION_LOG: out/admission.log
+        run: bash scripts/surface/admission-open-pr.sh

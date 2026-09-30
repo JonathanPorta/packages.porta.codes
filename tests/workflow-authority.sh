@@ -4,8 +4,8 @@
 #
 #   A1  only admit-candidate.yml:open-pr declares Environment admission-pr
 #   A2  only that job loads the admission-pr loader profile
-#   A3  its only checkout is sparse (the loader and scripts/bws) and keeps no
-#       git credentials
+#   A3  its only checkout is sparse (the loader, scripts/bws and the PR
+#       script) and keeps no git credentials
 #   A4  it runs no build, admission, packaging or signing step
 #   A5  no other job mentions an ADMISSION_PR_* value
 #   A6  its workflow token is read-only (the App token does the writing)
@@ -52,9 +52,9 @@ check() {
         (if $o == null then "A1 admit-candidate.yml has no open-pr job" else
           ([ $o.v.steps[] | select((.uses // "") | startswith("actions/checkout@")) ]) as $co
           | (if ($co | length) != 1
-               or ($co[0].with["sparse-checkout"] // "" | split("\n") | map(select(. != "")) | sort) != [".github/actions/load-secrets", "scripts/bws"]
+               or ($co[0].with["sparse-checkout"] // "" | split("\n") | map(select(. != "")) | sort) != [".github/actions/load-secrets", "scripts/bws", "scripts/surface/admission-open-pr.sh"]
                or ($co[0].with["persist-credentials"] != false)
-             then "A3 open-pr checkout is not exactly a credential-less sparse checkout of the loader and scripts/bws" else empty end),
+             then "A3 open-pr checkout is not exactly a credential-less sparse checkout of the loader, scripts/bws and the PR script" else empty end),
             (if any($o.v.steps[]; (.run // "") | test("\\bmake\\b|docker|admit\\.sh|pkgrepo-|rpmsign|rpm-finalize|gpg|sign\\.sh|nfpm")) then "A4 open-pr runs a build, admission or signing step" else empty end),
             (if ($o.v.permissions // {}) != {"contents": "read"} then "A6 open-pr workflow-token permissions are \($o.v.permissions // {} | tostring), not contents: read" else empty end),
             ([ $o.v.steps[] | select((.uses // "") | startswith("actions/create-github-app-token")) ]) as $tk
