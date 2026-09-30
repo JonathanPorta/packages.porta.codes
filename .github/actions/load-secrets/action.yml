@@ -80,7 +80,7 @@ runs:
       env:
         INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
         INPUT_SECRETS: |
-          00000000-0000-0000-0000-000000000000 > PACKAGES_CANDIDATE_READ_TOKEN
+          7bf5435e-60c6-4651-b458-b4d5003a36d4 > PACKAGES_CANDIDATE_READ_TOKEN
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
 
     # ── profile: repository-signing ── BWS project packages.porta.codes-repo-signing,
