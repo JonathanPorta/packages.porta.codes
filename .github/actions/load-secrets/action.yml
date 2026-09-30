@@ -92,5 +92,5 @@ runs:
       env:
         INPUT_ACCESS_TOKEN: ${{ inputs.access_token }}
         INPUT_SECRETS: |
-          00000000-0000-0000-0000-000000000000 > PACKAGES_REPO_SIGNING_KEY
+          df98a8e5-07a6-4c0e-afcf-b4d5002e7843 > PACKAGES_REPO_SIGNING_KEY
       run: bash "$GITHUB_WORKSPACE/scripts/bws/sm-action-run.sh"
