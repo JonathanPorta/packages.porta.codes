@@ -36,7 +36,7 @@ other existing credential are **not touched**. Nothing here rotates anything.
   | packages.porta.codes | `repository-publication` | branch `main` | AWS OIDC role is bound to this Environment |
   | packages.porta.codes | `infrastructure-plan` | branch `main` | the read-only Terraform plan role trusts only this Environment |
   | packages.porta.codes | `infrastructure` | branch `main` | the Terraform apply role trusts only this Environment |
-  | kioskd | `rpm-signing` | **tag `v*` only** | kioskd's `release.yml` runs on `v*` tag pushes; its signing job also asserts the tagged commit is an ancestor of `origin/main` |
+  | kioskd | `rpm-signing` | **follows kioskd's merged release trigger**: tag `v*` while kioskd's `main` still releases on `v*` tags; branch `main` once kioskd#34 (reviewed release PR on `main`, the workflow creates the tag) is merged | `github-environments.sh` reads kioskd's `release.yml` on `main` and applies exactly the matching policy, so the signing job is never locked out mid-transition |
   | corpus | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main |
   | keysprout | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main (and dispatch from main) |
 
@@ -221,7 +221,7 @@ make bws-bootstrap APP_NAME=<project> ARGS="--secrets-list .bws/<domain>.list \
 | Row | `<directory>` | `<domain>` | `<project>` | Machine account | `<environment>` (deploys from) | Service secret ← value |
 |---|---|---|---|---|---|---|
 | A1 | `/Users/portaj/devel/portaj/packages.porta.codes` | `repository-signing` | `packages.porta.codes-repo-signing` | `packages.porta.codes-repo-signing-ci` | `repository-signing` (branch `main`) | `PACKAGES_REPO_SIGNING_KEY` ← contents of `$KEYS/repository.sec.asc` |
-| A2 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `kioskd-rpm-signing-ci` | `rpm-signing` (tag `v*` only) | `KIOSKD_RPM_SIGNING_KEY` ← contents of `$KEYS/kioskd-rpm.sec.asc` |
+| A2 | `/Users/portaj/devel/portaj/kioskd` | `rpm-signing` | `kioskd-rpm-signing` | `kioskd-rpm-signing-ci` | `rpm-signing` (follows kioskd's release trigger — §0) | `KIOSKD_RPM_SIGNING_KEY` ← contents of `$KEYS/kioskd-rpm.sec.asc` |
 | A3 | `/Users/portaj/devel/portaj/corpus` | `rpm-signing` | `corpus-rpm-signing` | `corpus-rpm-signing-ci` | `rpm-signing` (branch `main`) | `CORPUS_RPM_SIGNING_KEY` ← contents of `$KEYS/corpus-rpm.sec.asc` |
 | A4 | `/Users/portaj/devel/portaj/keysprout` | `rpm-signing` | `keysprout-rpm-signing` | `keysprout-rpm-signing-ci` | `rpm-signing` (branch `main`) | `KEYSPROUT_RPM_SIGNING_KEY` ← contents of `$KEYS/keysprout-rpm.sec.asc` |
 

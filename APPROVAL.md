@@ -6,10 +6,13 @@ the read-only Worker, the scoped AWS publisher role, and the separated BWS
 signing and ingestion domains; the candidate-read token (Contents: read on the
 three producers only). Corrections, now applied below and in the code:
 
-1. **Environments match each producer's trusted release workflow** — kioskd's
-   `rpm-signing` allows tag `v*` only (it releases on `v*` tags, and its signing
-   job asserts the tagged commit is on `main`); corpus and keysprout stay
-   `main`; no Environment is broadened (`scripts/provision/github-environments.sh`).
+1. **Environments match each producer's trusted release workflow** — corpus
+   and keysprout Environments allow branch `main` only; kioskd's `rpm-signing`
+   follows kioskd's merged release trigger: `tag v*` while kioskd's `main`
+   releases on `v*` tags, exactly `branch main` once kioskd#34 (reviewed
+   release PR on `main`; the workflow creates the tag — owner direction
+   2026-09-30) is merged. No Environment is broadened
+   (`scripts/provision/github-environments.sh` derives kioskd's policy).
 2. **The Worker's ORIGIN is the certificate-valid HTTPS S3 REST endpoint**
    (path-style), never the HTTP website endpoint.
 3. **The Worker route fails closed** when the Free plan allowance is exhausted;
@@ -185,7 +188,8 @@ existing key.
 
 Environment deployment policies match each trusted release workflow exactly:
 `main` for this repository's five Environments and for corpus and keysprout;
-**tag `v*` only** for kioskd's `rpm-signing` (see PROVISIONING.md §0).
+kioskd's `rpm-signing` follows kioskd's merged release trigger — `tag v*`
+until kioskd#34 merges, then `branch main` (see PROVISIONING.md §0).
 
 ### Ordered steps
 
@@ -196,7 +200,7 @@ Environment deployment policies match each trusted release workflow exactly:
 | 3 | owner | Follow **PROVISIONING.md** §1–§11 (row 0, Batch K, Batch A, Batch B): the Cloudflare token and default domain, key generation, the read-only PAT, the signing/ingest bootstrapper runs, web-UI secret entry, cleanup; and an SSO sign-in on an IAM-capable permission set for step 4. |
 | 4 | me | With that SSO session: `scripts/provision/aws-oidc-bootstrap.sh` (`--plan`, then `--apply`, then `--verify`) — the Environments read back first, then the three roles, their trust and boundaries (owner-authorized as part of this deployment). |
 | 5 | me → owner | Dispatch **Terraform plan** on `main`; the owner reviews the `terraform-plan` artifact (bucket, guards, DNS, Worker, route, the publisher's inline policy). On approval I dispatch **Terraform apply** with that run id, then `make verify-edge`. |
-| 6 | me | Commit public halves, fingerprints and the filled loader UUIDs; producer release-ceremony PRs (RPM finalization with signing-v0.3.0; candidate signing for corpus/keysprout; kioskd's tag job asserts ancestry of `main`), each through review. |
+| 6 | me | Commit public halves, fingerprints and the filled loader UUIDs; producer release-ceremony PRs (RPM finalization with signing-v0.3.0; candidate signing for corpus/keysprout; kioskd's signing job refuses any commit not on `main`), each through review. kioskd then moves to releases from a reviewed release PR (kioskd#34); only AFTER that merges, re-run `scripts/provision/github-environments.sh --apply`, which switches kioskd's `rpm-signing` from `tag v*` to exactly `branch main` because it follows kioskd's merged trigger. |
 | 7 | me | Admit the first candidates, prove the admission-PR check path (§5), merge through review, watch **Publish** through read-back, then real APT/DNF evidence against `https://packages.porta.codes/`; record it against PR-2…PR-15. |
 
 ## 5. Admission PRs and required checks
