@@ -9,18 +9,18 @@
 #   (infrastructure-plan / infrastructure are the Environments the Terraform
 #   OIDC roles trust; aws-oidc-bootstrap.sh reads them back BEFORE any role
 #   trusts them — blessed-cicd #9 ordering.)
-#   JonathanPorta/kioskd                rpm-signing                   → tag v* ONLY
-#                                       (kioskd's release.yml runs on v* tag pushes;
-#                                       no branch may deploy to it. The signing job
-#                                       itself asserts the tagged commit is an
-#                                       ancestor of origin/main — reviewed code only)
+#   JonathanPorta/kioskd                rpm-signing                   → branch main
 #   JonathanPorta/corpus                rpm-signing, release-signing  → branch main
 #   JonathanPorta/keysprout             rpm-signing, release-signing  → branch main
-#                                       (both release on push to main / dispatch on main)
+#                                       (all three release from main: kioskd and
+#                                       keysprout by merging a reviewed release PR,
+#                                       corpus on push to main. No tag is pushed by
+#                                       hand; kioskd's was `tag v*` until
+#                                       kioskd#34 — owner direction 2026-09-30)
 #
 # No Environment is broadened to accommodate another. Each gets custom
 # deployment policies (never "all branches"), and nothing else — required
-# reviewers are not added (the reviewed-merge gate is the branch/tag rule).
+# reviewers are not added (the reviewed-merge gate is the branch rule).
 # Default is a DRY RUN that prints what it would set; --apply makes the calls.
 # Needs gh authenticated with admin on the four repositories. Idempotent.
 set -euo pipefail
@@ -32,7 +32,7 @@ ROWS=(
   "JonathanPorta/packages.porta.codes repository-publication branch main"
   "JonathanPorta/packages.porta.codes infrastructure-plan branch main"
   "JonathanPorta/packages.porta.codes infrastructure branch main"
-  "JonathanPorta/kioskd rpm-signing tag v*"
+  "JonathanPorta/kioskd rpm-signing branch main"
   "JonathanPorta/corpus rpm-signing branch main"
   "JonathanPorta/corpus release-signing branch main"
   "JonathanPorta/keysprout rpm-signing branch main"
