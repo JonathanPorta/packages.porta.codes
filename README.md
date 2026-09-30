@@ -130,7 +130,9 @@ The owner-facing walkthrough is **[`PROVISIONING.md`](PROVISIONING.md)**; in out
 
 1. Create the repository; push `main`; create every Environment with its exact
    deployment policy (`scripts/provision/github-environments.sh --apply`:
-   `main` here and in every producer Environment).
+   `main` here and in the producer Environments; kioskd's `rpm-signing`
+   follows kioskd's merged release trigger — `tag v*` until kioskd#34, then
+   `branch main`).
 2. `scripts/provision/generate-keys.sh <new-dir>` on a trusted workstation:
    generates the repository key and the three producer RPM keys (OpenPGP RSA
    4096) and the corpus/keysprout candidate keys (Ed25519) into 0600 files,

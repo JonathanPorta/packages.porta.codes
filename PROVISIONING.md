@@ -36,7 +36,7 @@ other existing credential are **not touched**. Nothing here rotates anything.
   | packages.porta.codes | `repository-publication` | branch `main` | AWS OIDC role is bound to this Environment |
   | packages.porta.codes | `infrastructure-plan` | branch `main` | the read-only Terraform plan role trusts only this Environment |
   | packages.porta.codes | `infrastructure` | branch `main` | the Terraform apply role trusts only this Environment |
-  | kioskd | `rpm-signing` | branch `main` | `release.yml` runs on pushes to `main` and signs only on the merge of the reviewed release PR; the workflow creates the tag (kioskd#34). Was tag `v*` until 2026-09-30 |
+  | kioskd | `rpm-signing` | **follows kioskd's merged release trigger**: tag `v*` while kioskd's `main` still releases on `v*` tags; branch `main` once kioskd#34 (reviewed release PR on `main`, the workflow creates the tag) is merged | `github-environments.sh` reads kioskd's `release.yml` on `main` and applies exactly the matching policy, so the signing job is never locked out mid-transition |
   | corpus | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main |
   | keysprout | `rpm-signing`, `release-signing` | branch `main` | `release.yml` runs on push to main (and dispatch from main) |
 
