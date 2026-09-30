@@ -9,9 +9,22 @@ name: Admit candidate
 #
 # Authority, one domain per job:
 #   fetch    candidate-ingest Environment: ONLY the producer read token.
-#   admit    no secret: the pinned tools image, offline.
-#   propose  GITHUB_TOKEN with contents + pull-requests write: pushes a branch
-#            and opens a PR. Never touches main, keys, or the store.
+#   admit    no secret: the pinned tools image, offline. Its admitted inventory
+#            leaves it only as an artifact.
+#   open-pr  admission-pr Environment: ONLY this repository's admission-PR
+#            GitHub App key (blessed releases.release-pr@1 RP-6/RP-7). It mints
+#            a token for THIS repository (contents + pull-requests write),
+#            creates the branch, commits the admitted inventory and opens the
+#            PR through the API. It checks out and runs no repository code but
+#            the secret loader; no build, admission or signing step; the
+#            candidate token never reaches it.
+#
+# The App PRIVATE KEY is the real boundary: restricting the minted token to this
+# repository limits that token only, and any code that could read the key could
+# mint tokens for every repository the App is installed on. The App is
+# installed on this repository alone, and only open-pr can read its key.
+# Because the PR is opened by the App (not GITHUB_TOKEN), `pull_request`
+# workflows — the required checks — start on their own.
 
 on:
   workflow_dispatch:
@@ -121,47 +134,102 @@ jobs:
             out/admission.log
             out/status
 
-  propose:
-    name: 📝 Open the inventory PR
+  open-pr:
+    name: 📝 Open the inventory PR (admission-PR App)
     needs: admit
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    environment:
+      name: admission-pr
+    # The App token does the writing; the workflow token stays read-only.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
+      - name: 🔒 main only
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::admission PRs are opened from main only, not $GITHUB_REF"; exit 1; }
+
+      # The secret loader and the PR script only: no product or admission code
+      # runs in this job.
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/load-secrets
+            scripts/bws
+            scripts/surface/admission-open-pr.sh
+          sparse-checkout-cone-mode: false
+
       - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: admission
           path: out
-      - name: 📝 Branch, commit, PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ inputs.producer_repo }}
-          TAG: ${{ inputs.tag }}
+
+      - name: 🚦 Changed, and provisioned?
+        id: gate
         run: |
           set -euo pipefail
           if [ "$(cat out/status)" = unchanged ]; then
-            echo "::notice::$REPO $TAG is already admitted; no PR"
+            echo "::notice::already admitted; no PR"
+            echo "open=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
-          branch="admit/${REPO#*/}-$TAG"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch -c "$branch"
-          cp out/inventory.json inventory/inventory.json
-          git add inventory/inventory.json
-          git commit -q -m "feat: admit $REPO $TAG"
-          git push -q origin "$branch"
-          {
-            echo "Admits \`$REPO\` \`$TAG\` into the package inventory (blessed releases.package-repositories@1 PR-2/PR-3)."
-            echo
-            echo "Admission log:"
-            echo '```'
-            cat out/admission.log
-            echo '```'
-            echo
-            echo "Before merging: run **CI** on \`$branch\` (Actions → CI → Run workflow) — PRs opened by GITHUB_TOKEN do not start it — and get an independent review. Merging publishes (publish.yml)."
-          } >body.md
-          gh pr create --base main --head "$branch" --title "feat: Admit ${REPO#*/} $TAG" --body-file body.md --assignee JonathanPorta
+          if grep -Eq '^ *00000000-0000-0000-0000-[0-9a-fA-F]{12} > ADMISSION_PR_APP_(CLIENT_ID|PRIVATE_KEY)$' .github/actions/load-secrets/action.yml; then
+            echo "::error::admission-pr is not provisioned (placeholder UUID). See PROVISIONING.md §14."; exit 1
+          fi
+          echo "open=true" >>"$GITHUB_OUTPUT"
+
+      - name: 🔐 Load the admission-PR App key
+        if: steps.gate.outputs.open == 'true'
+        uses: ./.github/actions/load-secrets
+        with:
+          profile: admission-pr
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+
+      # BWS holds the key base64-encoded on one line (bootstrap type
+      # github_app_private_key); the token action needs the PEM. Every PEM line
+      # is masked before the decoded key enters the job environment.
+      - name: 🔑 Decode the App key
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          set -euo pipefail
+          : "${ADMISSION_PR_APP_PRIVATE_KEY:?admission-pr key is not set}"
+          pem="$(printf '%s' "$ADMISSION_PR_APP_PRIVATE_KEY" | base64 -d)"
+          while IFS= read -r line; do [ -z "$line" ] || echo "::add-mask::$line"; done <<<"$pem"
+          d="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          { echo "ADMISSION_PR_APP_PEM<<$d"; printf '%s\n' "$pem"; echo "$d"; echo "ADMISSION_PR_APP_PRIVATE_KEY="; } >>"$GITHUB_ENV"
+
+      - name: 🪪 Mint a token for THIS repository only
+        if: steps.gate.outputs.open == 'true'
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ env.ADMISSION_PR_APP_CLIENT_ID }}
+          private-key: ${{ env.ADMISSION_PR_APP_PEM }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: 🧼 Scrub the key
+        if: ${{ always() }}
+        run: |
+          d="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          { echo "ADMISSION_PR_APP_PEM<<$d"; echo; echo "$d"; echo "ADMISSION_PR_APP_PRIVATE_KEY="; echo "ADMISSION_PR_APP_CLIENT_ID="; } >>"$GITHUB_ENV"
+
+      # Branch, commit and PR through the API with the App token. Exact scope:
+      # the branch is one commit on main changing only the inventory, its PR a
+      # same-repository PR into main at that commit. An exact retry is a no-op;
+      # anything else is refused, never overwritten or proposed.
+      - name: 📝 Branch, commit, PR
+        if: steps.gate.outputs.open == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ inputs.producer_repo }}
+          TAG: ${{ inputs.tag }}
+          SELF: ${{ github.repository }}
+          BASE_SHA: ${{ github.sha }}
+          INVENTORY: out/inventory.json
+          ADMISSION_LOG: out/admission.log
+        run: bash scripts/surface/admission-open-pr.sh

@@ -345,20 +345,24 @@ Keep no other copy of any private file or of the PAT.
 
 ## 12. Admission PRs and the required check (proved, not assumed)
 
-`admit-candidate.yml` opens each admission PR with `GITHUB_TOKEN`; GitHub does
-not start `pull_request` workflows for events caused by `GITHUB_TOKEN`, so the
-required `CI` check may not appear. DocSort showed a `workflow_dispatch` run on
-the branch does **not** satisfy a PR ruleset's required check, so that is not
-used as proof.
+`GITHUB_TOKEN` cannot open pull requests here (the repository setting that
+would allow it stays off — enabling it is forbidden by blessed
+`releases.release-pr@1` RP-6), and the first live admission proved it:
+[run 36682670203](https://github.com/JonathanPorta/packages.porta.codes/actions/runs/36682670203)
+admitted corpus v1.64.1 and then failed with *"GitHub Actions is not permitted
+to create or approve pull requests"*.
 
-1. The first real admission PR records the ruleset's required-check state as
-   opened (`gh pr checks`, the merge box).
-2. If `CI` is absent, the one operator step is: **close and reopen that PR**
-   in the GitHub UI (a human event, which starts `pull_request` CI on the exact
-   head). I record whether that check satisfies the ruleset, and document it as
-   the standing review step for admission PRs.
-3. No PR-opening credential exists or is requested unless (2) demonstrably
-   fails; if it does, I bring that evidence with a single request.
+Admission PRs are therefore opened by this repository's **admission-PR GitHub
+App** (§14), from `admit-candidate.yml`'s `open-pr` job. A PR opened by an App
+starts `pull_request` workflows, so the ruleset's required checks
+(`🔎 check`, `🔁 end to end (native x86_64)`) run on their own — no close/reopen,
+no personal session, no `workflow_dispatch` substitute (DocSort showed that
+does not satisfy a ruleset). The App is never a reviewer, CODEOWNER or bypass
+actor: review stays independent.
+
+Proof, recorded on the first real admission PR: the PR's author is the App, and
+its required checks ran on its exact head and qualified (`gh pr checks`, the
+merge box). Until that is recorded, RP-6 is not claimed in `blessed.yml`.
 
 ## 13. AWS: three OIDC roles, bootstrap-owned (I run it with your SSO session)
 
@@ -411,3 +415,96 @@ permissions with `iam:PassRole`, `s3:*` or `Resource: *`.
 After it passes: I dispatch **Terraform plan** on `main`; you review the
 `terraform-plan` artifact; on your approval I dispatch **Terraform apply** with
 that run id (it refuses unless the plan is of `main`'s current HEAD).
+
+## 14. GitHub Apps — one per repository and role (blessed `releases.release-pr@1` RP-6/RP-7)
+
+You approved two roles: a release-PR identity for the producers and an
+admission-PR identity for this surface. The recommended implementation, **for
+your confirmation in this package**, is four dedicated Apps, each installed on
+**exactly one** repository (the alternative and its risk: **Sharing**, below).
+None exists yet; you register them (GitHub web UI — the only way to create an App or its
+key), I prepare each consumer and verify.
+
+| App (suggested name) | Installed on (only) | Repository permissions | BWS project → machine account | Secrets (key types) | Environment (default branch only) | The ONE job that can read the key |
+|---|---|---|---|---|---|---|
+| `packages-porta-codes-admission-pr` | JonathanPorta/packages.porta.codes | Contents: write · Pull requests: write · Metadata: read | `packages.porta.codes-admission-pr` → `packages.porta.codes-admission-pr-ci` | `ADMISSION_PR_APP_CLIENT_ID` (`github_app_id`), `ADMISSION_PR_APP_PRIVATE_KEY` (`github_app_private_key`) | `admission-pr` | `admit-candidate.yml` → `open-pr` |
+| `kioskd-release-pr` | JonathanPorta/kioskd | Contents: write · Pull requests: write · Issues: write (release-PR labels) · Metadata: read | `kioskd-release-pr` → `kioskd-release-pr-ci` | `RELEASE_PR_APP_CLIENT_ID`, `RELEASE_PR_APP_PRIVATE_KEY` | `release-pr` | `release.yml` → the release-please job |
+| `corpus-release-pr` | JonathanPorta/corpus | same as kioskd | `corpus-release-pr` → `corpus-release-pr-ci` | same names | `release-pr` | `release.yml` → the release-please job |
+| `keysprout-release-pr` | JonathanPorta/keysprout | same as kioskd | `keysprout-release-pr` → `keysprout-release-pr-ci` | same names | `release-pr` | `release.yml` → the release-please job |
+
+(Names follow the dot-notation rule, blessed-cicd#313: the FQDN-named surface's
+BWS project is dotted; the producers' are not FQDNs.)
+
+**Key versus token — the boundary.** Each run mints an installation token
+restricted to the current repository and exactly the role's permissions, and
+revokes it at the end of the job. That restriction limits **the token only**:
+any code that can read an App's **private key** can mint tokens for **every**
+repository the App is installed on. The boundary is therefore who can read the
+key — which is why each App is installed on one repository, and why its key is
+readable only by one job: the only job that declares that Environment and loads
+that loader profile, which checks out nothing but the secret loader (and,
+here, the API-only PR script), runs no build, admission, packaging,
+RPM-finalization or candidate-signing step, and
+receives what it commits (an admitted inventory, a release-please change set)
+from earlier keyless jobs or the API. `tests/workflow-authority.sh` (in
+`make check`) enforces this for the admission App, with a mutation control per
+rule; each producer's adoption PR carries the same check.
+
+**Sharing — your decision.** The alternative is one release-PR App shared by
+the three producers (two Apps in total). Its key would then sit in three
+repositories' Environments, and a compromise of any one producer's PR-opening
+job would be `contents: write` on the other two, whatever repository its
+tokens were requested for. The recommended split (four Apps) costs one extra
+registration per producer, and a leaked key reaches only the repository it
+already serves. The consumer code is identical either way; only which App's
+key goes in each producer's BWS project differs.
+
+**Preconditions (me, before each App is installed):** the consumer's adoption PR
+is merged (its `.bws/<domain>.list/.env`, loader profile and PR-opening job
+exist); its Environment exists with exactly the default branch and no secret;
+and its default branch has a ruleset requiring a PR and the required checks, so
+even this token cannot land a change without review (RP-7). I tell you when
+each App's row is ready.
+
+### Per App: register, key, install (GitHub web UI, ~3 minutes each)
+
+1. <https://github.com/settings/apps/new> → **GitHub App name** from the table;
+   **Homepage URL** the repository URL; **Webhook → Active: unchecked** (no URL,
+   no events); **Repository permissions** exactly the table's row (everything
+   else "No access"); **Where can this GitHub App be installed?** "Only on this
+   account" → **Create GitHub App**.
+2. On the App's General page, copy the **Client ID** (starts `Iv`) — its
+   `*_APP_CLIENT_ID` value.
+3. **Private keys → Generate a private key**: a `.pem` downloads. Keep it only
+   until §14's verification (below).
+4. **Install App** → your account → **Only select repositories** → exactly the
+   table's one repository → Install. Do not add the App as a reviewer,
+   CODEOWNER or ruleset bypass actor anywhere.
+
+### Per App: the bootstrapper row (same shape as §7/§9)
+
+In the repository's clone, on a fresh branch from `main`, with the Bitwarden
+**admin** token exported (`read -rs BWS_ACCESS_TOKEN && export BWS_ACCESS_TOKEN`):
+
+```sh
+make bws-bootstrap APP_NAME=<BWS project> ARGS="--secrets-list .bws/<domain>.list --project-id-file .bws/<domain>.env --gh-environments <environment> --plan"
+make bws-bootstrap APP_NAME=<BWS project> ARGS="--secrets-list .bws/<domain>.list --project-id-file .bws/<domain>.env --gh-environments <environment> --no-secret-values"
+```
+
+(`<domain>`/`<environment>`: `admission-pr` here, `release-pr` in each
+producer.) When it pauses, in the web vault: machine account `<project>-ci`,
+**Can read** on `<project>` only, one access token pasted at the hidden prompt
+(→ that Environment's `BWS_ACCESS_TOKEN`); in the project, two secrets:
+
+- `*_APP_CLIENT_ID` ← the Client ID from step 2;
+- `*_APP_PRIVATE_KEY` ← the key **base64-encoded on one line** (the
+  bootstrapper's `github_app_private_key` type; a raw multi-line PEM breaks the
+  loader): `base64 -i <the .pem> | tr -d '\n' | clipcopy`, paste, then
+  `pbcopy < /dev/null`.
+
+Re-run the `--no-secret-values` line to fill the IDs; `git status --short`
+shows the row's `.bws/<domain>.env` and the loader. Leave them uncommitted and
+tell me "<App> done": I commit them through review, then prove the App with its
+real first PR (admission: the first admission PR; producers: their first
+release PR) — the PR's author is the App and its required checks ran. Only
+then delete that `.pem` (`rm -P <file>.pem`).
