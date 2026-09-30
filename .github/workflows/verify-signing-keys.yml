@@ -40,25 +40,31 @@ jobs:
       - name: 🔏 Sign a throwaway input; print only the fingerprint
         run: |
           set -euo pipefail
+          # FIRST: no later step or post action may see it (the loader wrote it
+          # to GITHUB_ENV; `unset` alone only affects this shell).
+          echo "PACKAGES_REPO_SIGNING_KEY=" >>"$GITHUB_ENV"
           k="${PACKAGES_REPO_SIGNING_KEY:-}"
           unset PACKAGES_REPO_SIGNING_KEY
           [ -n "$k" ] || { echo "::error::PACKAGES_REPO_SIGNING_KEY is empty"; exit 1; }
           GNUPGHOME="$(mktemp -d)"
           export GNUPGHOME
+          d="$(mktemp -d)"
+          trap 'gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME" "$d"' EXIT
           chmod 700 "$GNUPGHOME"
           printf '%s\n' "$k" | gpg --batch --quiet --import 2>/dev/null
           k=""
           n="$(gpg --batch --with-colons --list-secret-keys | grep -c '^sec:' || true)"
           [ "$n" = 1 ] || { echo "::error::the secret holds $n primary keys, not exactly one"; exit 1; }
           fpr="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^sec:/{p=1; next} p && /^fpr:/{print $10; exit}')"
-          d="$(mktemp -d)"
           echo "throwaway $GITHUB_RUN_ID" >"$d/in"
           gpg --batch --yes --quiet --local-user "$fpr" --detach-sign --output "$d/in.sig" "$d/in"
           gpg --batch --quiet --export "$fpr" >"$d/pub.gpg"
           gpgv --keyring "$d/pub.gpg" "$d/in.sig" "$d/in" 2>/dev/null
-          rm -rf "$GNUPGHOME"
           echo "repository-signing PACKAGES_REPO_SIGNING_KEY fingerprint: $fpr (signed and verified)"
           echo "### repository-signing: \`$fpr\` (signed and verified)" >>"$GITHUB_STEP_SUMMARY"
+      - name: 🧹 Scrub PACKAGES_REPO_SIGNING_KEY from the job environment (always)
+        if: always()
+        run: echo "PACKAGES_REPO_SIGNING_KEY=" >>"$GITHUB_ENV"
   candidate_ingest_pat:
     name: 🔏 candidate-ingest (PACKAGES_CANDIDATE_READ_TOKEN)
     runs-on: ubuntu-latest
@@ -82,6 +88,9 @@ jobs:
       - name: 🔎 One read-only call per producer; print only status and count
         run: |
           set -euo pipefail
+          # FIRST: no later step or post action may see it (the loader wrote it
+          # to GITHUB_ENV; `unset` alone only affects this shell).
+          echo "PACKAGES_CANDIDATE_READ_TOKEN=" >>"$GITHUB_ENV"
           t="${PACKAGES_CANDIDATE_READ_TOKEN:-}"
           unset PACKAGES_CANDIDATE_READ_TOKEN
           [ -n "$t" ] || { echo "::error::PACKAGES_CANDIDATE_READ_TOKEN is empty"; exit 1; }
@@ -95,3 +104,6 @@ jobs:
             [ "$code" = 200 ] || exit 1
           done
           t=""
+      - name: 🧹 Scrub PACKAGES_CANDIDATE_READ_TOKEN from the job environment (always)
+        if: always()
+        run: echo "PACKAGES_CANDIDATE_READ_TOKEN=" >>"$GITHUB_ENV"
